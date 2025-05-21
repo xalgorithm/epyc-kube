@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obsidian-exporter
+  namespace: obsidian
+  labels:
+    app: obsidian-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: obsidian-exporter
+  template:
+    metadata:
+      labels:
+        app: obsidian-exporter
+    spec:
+      containers:
+      - name: obsidian-exporter
+        image: prom/node-exporter:v1.5.0
+        args:
+        - --path.procfs=/host/proc
+        - --path.sysfs=/host/sys
+        - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+)($|/)
+        - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$
+        ports:
+        - containerPort: 9100
+          name: metrics
+        resources:
+          limits:
+            cpu: 250m
+            memory: 180Mi
+          requests:
+            cpu: 102m
+            memory: 180Mi
+        volumeMounts:
+        - mountPath: /host/proc
+          name: proc
+          readOnly: true
+        - mountPath: /host/sys
+          name: sys
+          readOnly: true
+        - mountPath: /host/root
+          mountPropagation: HostToContainer
+          name: root
+          readOnly: true
+      volumes:
+      - hostPath:
+          path: /proc
+        name: proc
+      - hostPath:
+          path: /sys
+        name: sys
+      - hostPath:
+          path: /
+        name: root
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: obsidian-exporter
+  namespace: obsidian
+  labels:
+    app: obsidian-exporter
+spec:
+  selector:
+    app: obsidian-exporter
+  ports:
+  - port: 9100
+    targetPort: 9100
+    name: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: obsidian-exporter
+  namespace: obsidian
+  labels:
+    app: obsidian-exporter
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: obsidian-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s 

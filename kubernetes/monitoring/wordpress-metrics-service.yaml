@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-metrics
+  namespace: wordpress
+  labels:
+    app: wordpress
+    metrics: "true"
+spec:
+  selector:
+    app: wordpress
+  ports:
+  - name: metrics
+    port: 9117
+    targetPort: 9117
+  clusterIP: None
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: wordpress
+  namespace: wordpress
+  labels:
+    app: wordpress
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: wordpress
+      metrics: "true"
+  endpoints:
+  - port: metrics
+    interval: 15s 

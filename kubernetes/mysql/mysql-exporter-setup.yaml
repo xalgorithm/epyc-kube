@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mysql-exporter-setup
+  namespace: wordpress
+spec:
+  ttlSecondsAfterFinished: 100
+  template:
+    spec:
+      containers:
+      - name: mysql-client
+        image: mysql:5.7
+        command:
+        - /bin/bash
+        - -c
+        - |
+          mysql -h wordpress-mysql -u root -ppassword -e "
+          CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY 'password';
+          GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';
+          FLUSH PRIVILEGES;
+          "
+      restartPolicy: Never
+  backoffLimit: 3 

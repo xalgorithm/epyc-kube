@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-exporter
+  namespace: wordpress
+  labels:
+    app: mysql-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-exporter
+  template:
+    metadata:
+      labels:
+        app: mysql-exporter
+    spec:
+      containers:
+      - name: mysql-exporter
+        image: prom/mysqld-exporter:v0.14.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: db_root_password
+              name: wordpress-db-credentials
+        - name: DATA_SOURCE_NAME
+          value: "root:$(MYSQL_ROOT_PASSWORD)@(wordpress-mysql:3306)/"
+        ports:
+        - containerPort: 9104
+          name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-exporter
+  namespace: wordpress
+  labels:
+    app: mysql-exporter
+spec:
+  selector:
+    app: mysql-exporter
+  ports:
+  - port: 9104
+    targetPort: 9104
+    name: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mysql-exporter
+  namespace: wordpress
+  labels:
+    app: mysql-exporter
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: mysql-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s 

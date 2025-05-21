@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wordpress-fix-permissions
+  namespace: wordpress
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: fix-permissions
+        image: debian:bullseye-slim
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Fix ownership for WordPress
+          echo "Setting ownership to www-data:www-data"
+          chown -R www-data:www-data /var/www/html/
+          
+          # Set base permissions (faster than find)
+          echo "Setting base permissions"
+          chmod -R 755 /var/www/html/
+          
+          # Set special permissions for content directories
+          echo "Setting permissions for content directories"
+          chmod -R 775 /var/www/html/wp-content/
+          
+          # Ensure upgrade directories exist and are writable
+          echo "Setting up upgrade directories"
+          mkdir -p /var/www/html/wp-content/upgrade
+          mkdir -p /var/www/html/wp-content/upgrade-temp-backup
+          chmod -R 775 /var/www/html/wp-content/upgrade/
+          chmod -R 775 /var/www/html/wp-content/upgrade-temp-backup/
+          
+          echo "Permissions updated successfully"
+        volumeMounts:
+        - mountPath: /var/www/html
+          name: wordpress-persistent-storage
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: wordpress-data 

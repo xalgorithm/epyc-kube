@@ -29,7 +29,7 @@ output "kubeconfig_path" {
 output "access_instructions" {
   description = "Instructions for accessing the cluster"
   sensitive   = true
-  value = <<EOT
+  value       = <<EOT
 ----- Kubernetes Cluster Access -----
 
 1. SSH to the control node:

@@ -97,6 +97,24 @@ sed -i '' 's/127.0.0.1/CONTROL_NODE_PRIVATE_IP/g' kubeconfig.yaml
 terraform apply -var="deploy_kubernetes=true"
 ```
 
+## Architecture Diagram
+
+![Kubernetes Services Architecture](kubernetes-services-diagram.png)
+
+This diagram illustrates the complete architecture of the project, showing the relationships and dependencies between all components:
+
+- **Infrastructure Layer**: Proxmox VMs, k3s Kubernetes, MetalLB, and NFS storage
+- **Core Services**: Traefik Ingress, Cert-Manager, and HashiCorp Vault
+- **Observability Stack**: Prometheus, Grafana, Loki, Tempo, Mimir, and Alertmanager
+- **Applications**: WordPress, Obsidian Sync with CouchDB, n8n, and their respective monitoring components
+
+The diagram visualizes key relationships including:
+- Service dependencies
+- Monitoring data flow (metrics and logs)
+- Ingress routing paths
+- Security integrations
+- Dashboard connections
+
 ## Modules
 
 ### Proxmox Module

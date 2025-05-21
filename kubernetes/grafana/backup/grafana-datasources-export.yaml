@@ -1,0 +1,44 @@
+apiVersion: v1
+data:
+  datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+    - name: "Prometheus"
+      type: prometheus
+      uid: prometheus
+      url: http://kube-prometheus-stack-prometheus.monitoring:9090/
+      access: proxy
+      isDefault: true
+      jsonData:
+        httpMethod: POST
+        timeInterval: 30s
+    - name: "Alertmanager"
+      type: alertmanager
+      uid: alertmanager
+      url: http://kube-prometheus-stack-alertmanager.monitoring:9093/
+      access: proxy
+      jsonData:
+        handleGrafanaManagedAlerts: false
+        implementation: prometheus
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","data":{"datasource.yaml":"apiVersion: 1\ndatasources:\n- name: Prometheus\n  type: prometheus\n  uid: prometheus\n  url: http://kube-prometheus-stack-prometheus.monitoring:9090/\n  access: proxy\n  isDefault: true\n  jsonData:\n    httpMethod: POST\n    timeInterval: 30s\n- name: Alertmanager\n  type: alertmanager\n  uid: alertmanager\n  url: http://kube-prometheus-stack-alertmanager.monitoring:9093/\n  access: proxy\n  jsonData:\n    handleGrafanaManagedAlerts: false\n    implementation: prometheus\n- name: Loki\n  type: loki\n  uid: loki\n  url: http://loki-gateway.monitoring.svc.cluster.local\n  access: proxy\n  jsonData:\n    maxLines: 1000\n    derivedFields: []\n    alertmanagerUid: alertmanager\n    manageAlerts: true\n    timeout: 60\n    implementation: \"loki\"\n- name: Tempo\n  type: tempo\n  url: http://tempo.monitoring.svc.cluster.local:3100 \n"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"kube-prometheus-stack-grafana-datasource","namespace":"monitoring"}}
+    meta.helm.sh/release-name: kube-prometheus-stack
+    meta.helm.sh/release-namespace: monitoring
+  creationTimestamp: "2025-05-16T18:50:08Z"
+  labels:
+    app: kube-prometheus-stack-grafana
+    app.kubernetes.io/instance: kube-prometheus-stack
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    app.kubernetes.io/version: 72.5.3
+    chart: kube-prometheus-stack-72.5.3
+    grafana_datasource: "1"
+    heritage: Helm
+    release: kube-prometheus-stack
+  name: kube-prometheus-stack-grafana-datasource
+  namespace: monitoring
+  resourceVersion: "310778"
+  uid: f801a9b1-0685-45a9-85e4-2b60150423f3

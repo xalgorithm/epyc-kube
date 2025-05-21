@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"annotations":{"cert-manager.io/cluster-issuer":"letsencrypt-staging","traefik.ingress.kubernetes.io/router.entrypoints":"web,websecure","traefik.ingress.kubernetes.io/router.middlewares":"default-redirect-https@kubernetescrd"},"creationTimestamp":"2025-05-21T05:28:11Z","generation":2,"name":"wordpress","namespace":"wordpress","resourceVersion":"301368","uid":"e97bf638-bbec-4b26-9334-2f973c574ec8"},"spec":{"ingressClassName":"traefik","rules":[{"host":"metaphysicalninja.com","http":{"paths":[{"backend":{"service":{"name":"wordpress","port":{"number":80}}},"path":"/","pathType":"Prefix"}]}}],"tls":[{"hosts":["metaphysicalninja.com"],"secretName":"wordpress-tls"}]},"status":{"loadBalancer":{"ingress":[{"ip":"10.0.1.214"}]}}}
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+  creationTimestamp: "2025-05-21T05:28:11Z"
+  generation: 3
+  name: wordpress
+  namespace: wordpress
+  resourceVersion: "301536"
+  uid: e97bf638-bbec-4b26-9334-2f973c574ec8
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: metaphysicalninja.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: wordpress
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - metaphysicalninja.com
+    secretName: wordpress-tls
+status:
+  loadBalancer:
+    ingress:
+    - ip: 10.0.1.214

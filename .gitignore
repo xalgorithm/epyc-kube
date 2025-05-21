@@ -61,3 +61,5 @@ node-token
 # OS-specific files
 .DS_Store
 Thumbs.db 
+
+wordpress-site/*

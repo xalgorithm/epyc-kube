@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: n8n
+  labels:
+    app: n8n
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "5678"
+        prometheus.io/scrape: "true"
+      labels:
+        app: n8n
+    spec:
+      containers:
+      - name: n8n
+        image: n8nio/n8n:latest
+        env:
+        - name: N8N_METRICS
+          value: "true"
+        - name: N8N_METRICS_ENDPOINT
+          value: "/metrics"
+        - name: N8N_HOST
+          value: n8n.local
+        - name: DB_TYPE
+          valueFrom:
+            secretKeyRef:
+              key: DB_TYPE
+              name: n8n-db-secret
+        - name: DB_SQLITE_PATH
+          valueFrom:
+            secretKeyRef:
+              key: DB_SQLITE_PATH
+              name: n8n-db-secret
+        - name: N8N_PORT
+          value: "5678"
+        - name: N8N_PROTOCOL
+          value: http
+        - name: NODE_ENV
+          value: production
+        - name: WEBHOOK_URL
+          value: https://automate.gray-beard.com
+        - name: N8N_BASIC_AUTH_ACTIVE
+          valueFrom:
+            secretKeyRef:
+              key: N8N_BASIC_AUTH_ACTIVE
+              name: n8n-db-secret
+        - name: N8N_BASIC_AUTH_USER
+          valueFrom:
+            secretKeyRef:
+              key: N8N_BASIC_AUTH_USER
+              name: n8n-db-secret
+        - name: N8N_BASIC_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: N8N_BASIC_AUTH_PASSWORD
+              name: n8n-db-secret
+        - name: N8N_RUNNERS_ENABLED
+          valueFrom:
+            secretKeyRef:
+              key: N8N_RUNNERS_ENABLED
+              name: n8n-db-secret
+        ports:
+        - containerPort: 5678
+          name: http
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /home/node/.n8n
+          name: n8n-data
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-data 

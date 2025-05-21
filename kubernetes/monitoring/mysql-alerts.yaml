@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mysql-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: mysql.rules
+    rules:
+    - alert: MySQLHighConnections
+      expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High MySQL connection usage"
+        description: "MySQL connection usage is {{ $value }}% of max connections for more than 5 minutes"
+        
+    - alert: MySQLSlowQueries
+      expr: rate(mysql_global_status_slow_queries[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High MySQL slow query rate"
+        description: "MySQL is executing {{ $value }} slow queries per second for more than 5 minutes" 

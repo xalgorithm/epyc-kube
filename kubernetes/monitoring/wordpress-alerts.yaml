@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: wordpress-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: wordpress.rules
+    rules:
+    - alert: WordPressDown
+      expr: up{job="wordpress-exporter"} == 0 or absent(up{job="wordpress-exporter"})
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "WordPress is down"
+        description: "WordPress has been down for more than 5 minutes"
+        
+    - alert: WordPressHighResponseTime
+      expr: histogram_quantile(0.95, sum by(le) (rate(apache_http_request_duration_seconds_bucket{job="wordpress-exporter"}[5m]))) > 2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High WordPress response time"
+        description: "WordPress 95th percentile response time is {{ $value }} seconds for more than 5 minutes"
+        
+    - alert: WordPressHigh5xxRate
+      expr: rate(apache_http_response_codes_total{job="wordpress-exporter",code=~"5.."}[5m]) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High WordPress error rate"
+        description: "WordPress is returning 5xx errors at a rate of {{ $value }} per second for more than 5 minutes" 

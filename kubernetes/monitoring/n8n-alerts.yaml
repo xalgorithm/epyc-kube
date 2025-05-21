@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: n8n-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: n8n.rules
+    rules:
+    - alert: N8nHighQueue
+      expr: n8n_queue_size > 20
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High n8n queue size"
+        description: "n8n has a high queue size of {{ $value }} items for more than 5 minutes"
+        
+    - alert: N8nWorkflowErrorRate
+      expr: rate(n8n_workflow_failed_total[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High n8n workflow error rate"
+        description: "n8n has a high workflow error rate of {{ $value }} errors per minute for more than 5 minutes" 

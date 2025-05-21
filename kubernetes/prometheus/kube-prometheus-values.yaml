@@ -1,0 +1,79 @@
+grafana:
+  adminUser: xalg
+  persistence:
+    enabled: true
+  envValueFrom:
+    GF_SECURITY_ADMIN_PASSWORD:
+      secretKeyRef:
+        name: grafana-admin-credentials
+        key: admin-password
+    GF_SECURITY_ADMIN_USER:
+      secretKeyRef:
+        name: grafana-admin-credentials
+        key: admin-user
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: browser
+  sidecar:
+    dashboards:
+      enabled: true
+    datasources:
+      enabled: true
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://kube-prometheus-stack-prometheus.monitoring:9090/
+        access: proxy
+        isDefault: true
+        jsonData:
+          httpMethod: POST
+          timeInterval: 30s
+      - name: Alertmanager
+        type: alertmanager
+        uid: alertmanager
+        url: http://kube-prometheus-stack-alertmanager.monitoring:9093/
+        access: proxy
+        jsonData:
+          handleGrafanaManagedAlerts: false
+          implementation: prometheus
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki-gateway.monitoring.svc.cluster.local
+        access: proxy
+        jsonData:
+          maxLines: 1000
+          derivedFields: []
+          alertmanagerUid: alertmanager
+          manageAlerts: true
+          timeout: 60
+          implementation: "loki"
+      - name: Tempo
+        type: tempo
+        url: http://tempo.monitoring.svc.cluster.local:3100
+  dashboards:
+    wordpress:
+      wordpress-dashboard:
+        json: |
+          {
+            "title": "WordPress Dashboard",
+            "tags": ["wordpress", "mysql"],
+            "timezone": "browser",
+            "schemaVersion": 37,
+            "uid": "wordpress"
+          }
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default 

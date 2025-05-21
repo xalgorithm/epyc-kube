@@ -1,0 +1,23 @@
+# Grafana Configuration for Helm upgrades
+grafana:
+  # Admin credentials managed by Kubernetes Secret
+  envValueFrom:
+    GF_SECURITY_ADMIN_USER:
+      secretKeyRef:
+        name: grafana-admin-credentials
+        key: admin-user
+    GF_SECURITY_ADMIN_PASSWORD:
+      secretKeyRef:
+        name: grafana-admin-credentials
+        key: admin-password
+  
+  # Persistence Settings
+  persistence:
+    enabled: true
+    
+  # Dashboard and datasource settings maintained by sidecar
+  sidecar:
+    dashboards:
+      enabled: true
+    datasources:
+      enabled: true 

@@ -109,6 +109,23 @@ spec:
         volumeMounts:
         - mountPath: /var/www/html
           name: wordpress-persistent-storage
+        # Add a lifecycle hook to enable Apache server-status
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - |
+                cat > /tmp/status.conf << 'EOF'
+                <Location /server-status>
+                  SetHandler server-status
+                  Require local
+                  Require ip 10.42.0.0/16
+                </Location>
+                EOF
+                cp /tmp/status.conf /etc/apache2/conf-enabled/status.conf
+                apache2ctl graceful
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler

@@ -1,0 +1,61 @@
+grafana:
+  adminUser: xalg
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - access: proxy
+        isDefault: true
+        jsonData:
+          httpMethod: POST
+          timeInterval: 30s
+        name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://kube-prometheus-stack-prometheus.monitoring:9090/
+      - access: proxy
+        jsonData:
+          handleGrafanaManagedAlerts: false
+          implementation: prometheus
+        name: Alertmanager
+        type: alertmanager
+        uid: alertmanager
+        url: http://kube-prometheus-stack-alertmanager.monitoring:9093/
+      - access: proxy
+        jsonData:
+          alertmanagerUid: alertmanager
+          derivedFields: []
+          implementation: loki
+          manageAlerts: true
+          maxLines: 1000
+          timeout: 60
+        name: Loki
+        type: loki
+        uid: loki
+        url: http://loki-gateway.monitoring.svc.cluster.local
+      - name: Tempo
+        type: tempo
+        url: http://tempo.monitoring.svc.cluster.local:3100
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: browser
+  envValueFrom:
+    GF_SECURITY_ADMIN_PASSWORD:
+      secretKeyRef:
+        key: admin-password
+        name: grafana-admin-credentials
+    GF_SECURITY_ADMIN_USER:
+      secretKeyRef:
+        key: admin-user
+        name: grafana-admin-credentials
+  persistence:
+    enabled: true
+  sidecar:
+    dashboards:
+      enabled: true
+    datasources:
+      enabled: true
+prometheusOperator:
+  admissionWebhooks:
+    patch:
+      serviceAccount:
+        create: true

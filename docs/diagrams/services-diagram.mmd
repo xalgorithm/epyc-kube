@@ -1,0 +1,111 @@
+graph TD
+    %% Infrastructure layer
+    subgraph "Infrastructure"
+        PROXMOX["Proxmox VMs"]
+        K3S["k3s Kubernetes"]
+        METALLB["MetalLB"]
+        NFS["NFS Storage"]
+    end
+    
+    PROXMOX --> K3S
+    K3S --> METALLB
+    K3S --> NFS
+    
+    %% Core Services
+    subgraph "Core Services"
+        TRAEFIK["Traefik Ingress"]
+        CERTMGR["Cert-Manager"]
+        VAULT["HashiCorp Vault"]
+    end
+    
+    K3S --> TRAEFIK
+    K3S --> CERTMGR
+    K3S --> VAULT
+    
+    %% Monitoring Stack
+    subgraph "Observability"
+        PROM["Prometheus"]
+        GRAFANA["Grafana"]
+        LOKI["Loki"]
+        TEMPO["Tempo"]
+        MIMIR["Mimir"]
+        ALERTMGR["Alertmanager"]
+    end
+    
+    K3S --> PROM
+    PROM --> GRAFANA
+    PROM --> ALERTMGR
+    LOKI --> GRAFANA
+    TEMPO --> GRAFANA
+    MIMIR --> GRAFANA
+    
+    %% Applications
+    subgraph "Applications"
+        WP["WordPress"]
+        MYSQL["MySQL"]
+        OBSIDIAN["Obsidian Sync"]
+        COUCHDB["CouchDB"]
+        N8N["n8n Automation"]
+    end
+    
+    %% Connections
+    WP --> MYSQL
+    OBSIDIAN --> COUCHDB
+    
+    %% Monitoring connections
+    WP --> |Metrics| PROM
+    MYSQL --> |Metrics| PROM
+    OBSIDIAN --> |Metrics| PROM
+    COUCHDB --> |Metrics| PROM
+    N8N --> |Metrics| PROM
+    
+    %% Ingress connections
+    TRAEFIK --> WP
+    TRAEFIK --> OBSIDIAN
+    TRAEFIK --> N8N
+    TRAEFIK --> VAULT
+    TRAEFIK --> GRAFANA
+    
+    %% Cert manager
+    CERTMGR --> TRAEFIK
+    
+    %% Security
+    VAULT --> WP
+    VAULT --> OBSIDIAN
+    VAULT --> N8N
+    
+    %% Logging
+    WP --> |Logs| LOKI
+    MYSQL --> |Logs| LOKI
+    OBSIDIAN --> |Logs| LOKI
+    COUCHDB --> |Logs| LOKI
+    N8N --> |Logs| LOKI
+    
+    %% Custom monitoring
+    WPEXP["WordPress Exporter"] --> PROM
+    WP --> WPEXP
+    
+    %% Dashboards
+    WPDASH["WordPress Dashboard"]
+    OBSDASH["Obsidian Dashboard"]
+    N8NDASH["n8n Dashboard"]
+    
+    WPEXP --> WPDASH
+    MYSQL --> WPDASH
+    OBSIDIAN --> OBSDASH
+    COUCHDB --> OBSDASH
+    N8N --> N8NDASH
+    
+    WPDASH --> GRAFANA
+    OBSDASH --> GRAFANA
+    N8NDASH --> GRAFANA
+
+classDef infrastructure fill:#e1d5e7,stroke:#9673a6;
+classDef core fill:#dae8fc,stroke:#6c8ebf;
+classDef observability fill:#d5e8d4,stroke:#82b366;
+classDef applications fill:#fff2cc,stroke:#d6b656;
+
+class PROXMOX,K3S,METALLB,NFS infrastructure;
+class TRAEFIK,CERTMGR,VAULT core;
+class PROM,GRAFANA,LOKI,TEMPO,MIMIR,ALERTMGR observability;
+class WP,MYSQL,OBSIDIAN,COUCHDB,N8N,WPEXP,WPDASH,OBSDASH,N8NDASH applications; 

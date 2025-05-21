@@ -1,0 +1,126 @@
+digraph KubernetesServices {
+  rankdir=TB;
+  node [shape=box, style=filled, fontname="Arial"];
+  
+  /* Infrastructure layer */
+  subgraph cluster_infrastructure {
+    label="Infrastructure";
+    style=filled;
+    color=lightgrey;
+    node [style=filled, color="#e1d5e7"];
+    
+    PROXMOX [label="Proxmox VMs"];
+    K3S [label="k3s Kubernetes"];
+    METALLB [label="MetalLB"];
+    NFS [label="NFS Storage"];
+  }
+  
+  /* Core Services */
+  subgraph cluster_core {
+    label="Core Services";
+    style=filled;
+    color=lightblue;
+    node [style=filled, color="#dae8fc"];
+    
+    TRAEFIK [label="Traefik Ingress"];
+    CERTMGR [label="Cert-Manager"];
+    VAULT [label="HashiCorp Vault"];
+  }
+  
+  /* Monitoring Stack */
+  subgraph cluster_observability {
+    label="Observability";
+    style=filled;
+    color=lightgreen;
+    node [style=filled, color="#d5e8d4"];
+    
+    PROM [label="Prometheus"];
+    GRAFANA [label="Grafana"];
+    LOKI [label="Loki"];
+    TEMPO [label="Tempo"];
+    MIMIR [label="Mimir"];
+    ALERTMGR [label="Alertmanager"];
+  }
+  
+  /* Applications */
+  subgraph cluster_applications {
+    label="Applications";
+    style=filled;
+    color=lightyellow;
+    node [style=filled, color="#fff2cc"];
+    
+    WP [label="WordPress"];
+    MYSQL [label="MySQL"];
+    OBSIDIAN [label="Obsidian Sync"];
+    COUCHDB [label="CouchDB"];
+    N8N [label="n8n Automation"];
+    WPEXP [label="WordPress Exporter"];
+    WPDASH [label="WordPress Dashboard"];
+    OBSDASH [label="Obsidian Dashboard"];
+    N8NDASH [label="n8n Dashboard"];
+  }
+  
+  /* Dependencies */
+  PROXMOX -> K3S;
+  K3S -> METALLB;
+  K3S -> NFS;
+  
+  K3S -> TRAEFIK;
+  K3S -> CERTMGR;
+  K3S -> VAULT;
+  
+  K3S -> PROM;
+  PROM -> GRAFANA;
+  PROM -> ALERTMGR;
+  LOKI -> GRAFANA;
+  TEMPO -> GRAFANA;
+  MIMIR -> GRAFANA;
+  
+  /* Application connections */
+  WP -> MYSQL;
+  OBSIDIAN -> COUCHDB;
+  
+  /* Monitoring connections */
+  WP -> PROM [label="Metrics"];
+  MYSQL -> PROM [label="Metrics"];
+  OBSIDIAN -> PROM [label="Metrics"];
+  COUCHDB -> PROM [label="Metrics"];
+  N8N -> PROM [label="Metrics"];
+  
+  /* Ingress connections */
+  TRAEFIK -> WP;
+  TRAEFIK -> OBSIDIAN;
+  TRAEFIK -> N8N;
+  TRAEFIK -> VAULT;
+  TRAEFIK -> GRAFANA;
+  
+  /* Certificate management */
+  CERTMGR -> TRAEFIK;
+  
+  /* Security */
+  VAULT -> WP;
+  VAULT -> OBSIDIAN;
+  VAULT -> N8N;
+  
+  /* Logging */
+  WP -> LOKI [label="Logs"];
+  MYSQL -> LOKI [label="Logs"];
+  OBSIDIAN -> LOKI [label="Logs"];
+  COUCHDB -> LOKI [label="Logs"];
+  N8N -> LOKI [label="Logs"];
+  
+  /* Custom monitoring */
+  WPEXP -> PROM;
+  WP -> WPEXP;
+  
+  /* Dashboards */
+  WPEXP -> WPDASH;
+  MYSQL -> WPDASH;
+  OBSIDIAN -> OBSDASH;
+  COUCHDB -> OBSDASH;
+  N8N -> N8NDASH;
+  
+  WPDASH -> GRAFANA;
+  OBSDASH -> GRAFANA;
+  N8NDASH -> GRAFANA;
+} 

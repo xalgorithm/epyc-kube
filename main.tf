@@ -42,27 +42,27 @@ provider "proxmox" {
 # Configure Kubernetes Provider - conditional on kubeconfig existing
 provider "kubernetes" {
   alias = "kubernetes_provider"
-  
+
   # When deploy_kubernetes=false, create a stub configuration that doesn't connect to a real server
-  host = var.deploy_kubernetes ? "" : "https://localhost:12345"
+  host     = var.deploy_kubernetes ? "" : "https://localhost:12345"
   insecure = true
-  
+
   # When deploy_kubernetes=true, use the actual kubeconfig
-  config_path = var.deploy_kubernetes ? local.kubeconfig_path : ""
+  config_path    = var.deploy_kubernetes ? local.kubeconfig_path : ""
   config_context = var.deploy_kubernetes ? "default" : ""
 }
 
 # Configure Helm Provider - conditional on kubeconfig existing
 provider "helm" {
   alias = "helm_provider"
-  
+
   kubernetes {
     # When deploy_kubernetes=false, create a stub configuration that doesn't connect to a real server
-    host = var.deploy_kubernetes ? "" : "https://localhost:12345"
+    host     = var.deploy_kubernetes ? "" : "https://localhost:12345"
     insecure = true
-    
+
     # When deploy_kubernetes=true, use the actual kubeconfig
-    config_path = var.deploy_kubernetes ? local.kubeconfig_path : ""
+    config_path    = var.deploy_kubernetes ? local.kubeconfig_path : ""
     config_context = var.deploy_kubernetes ? "default" : ""
   }
 }
@@ -104,20 +104,20 @@ module "proxmox" {
   source = "./modules/proxmox"
 
   # Provider configuration
-  proxmox_node     = var.proxmox_node
-  vm_os_template   = var.vm_os_template
-  ssh_public_key   = var.ssh_public_key
+  proxmox_node   = var.proxmox_node
+  vm_os_template = var.vm_os_template
+  ssh_public_key = var.ssh_public_key
 
   # Network configuration
-  public_bridge    = var.public_bridge
-  private_bridge   = var.private_bridge
-  public_gateway   = var.public_gateway
+  public_bridge  = var.public_bridge
+  private_bridge = var.private_bridge
+  public_gateway = var.public_gateway
 
   # VM configuration
-  vm_definitions   = var.vm_definitions
-  k3s_server_name  = var.k3s_server_name
-  vm_user          = var.vm_user
-  k3s_token        = var.k3s_token
+  vm_definitions  = var.vm_definitions
+  k3s_server_name = var.k3s_server_name
+  vm_user         = var.vm_user
+  k3s_token       = var.k3s_token
 }
 
 # Kubernetes Infrastructure Module - Only created if deploy_kubernetes is true
@@ -136,13 +136,13 @@ module "kubernetes" {
   # Configuration
   deploy_kubernetes = var.deploy_kubernetes
   kubeconfig_path   = local.kubeconfig_path
-  
+
   # MetalLB configuration
   metallb_addresses = var.metallb_addresses
-  
+
   # NFS configuration
-  nfs_server        = var.nfs_server
-  nfs_path          = var.nfs_path
+  nfs_server             = var.nfs_server
+  nfs_path               = var.nfs_path
   deploy_nfs_provisioner = var.deploy_nfs_provisioner
 }
 
@@ -152,13 +152,13 @@ module "monitoring" {
   count  = var.deploy_kubernetes ? 1 : 0
 
   depends_on = [module.kubernetes]
-  
+
   # Use the aliased providers
   providers = {
     kubernetes = kubernetes.kubernetes_provider
     helm       = helm.helm_provider
   }
-  
+
   # Only deploy monitoring if kubernetes is deployed
   deploy_monitoring      = var.deploy_kubernetes
   kubeconfig_path        = local.kubeconfig_path
@@ -171,18 +171,18 @@ module "ingress" {
   count  = var.deploy_kubernetes ? 1 : 0
 
   depends_on = [module.kubernetes]
-  
+
   # Use the aliased providers
   providers = {
     kubernetes = kubernetes.kubernetes_provider
   }
-  
+
   # Configuration
-  kubeconfig_path   = local.kubeconfig_path
-  grafana_domain    = var.grafana_domain
-  deploy_ingress    = var.deploy_ingress
-  enable_tls        = var.enable_tls
-  cluster_issuer    = var.acme_staging ? "letsencrypt-staging" : "letsencrypt-prod"
+  kubeconfig_path = local.kubeconfig_path
+  grafana_domain  = var.grafana_domain
+  deploy_ingress  = var.deploy_ingress
+  enable_tls      = var.enable_tls
+  cluster_issuer  = var.acme_staging ? "letsencrypt-staging" : "letsencrypt-prod"
 }
 
 # Cert-Manager Module for Let's Encrypt integration - Only created if deploy_kubernetes is true
@@ -191,13 +191,13 @@ module "cert_manager" {
   count  = var.deploy_kubernetes ? 1 : 0
 
   depends_on = [module.kubernetes]
-  
+
   # Use the aliased providers
   providers = {
     kubernetes = kubernetes.kubernetes_provider
     helm       = helm.helm_provider
   }
-  
+
   # Configuration
   kubeconfig_path     = local.kubeconfig_path
   deploy_cert_manager = var.deploy_cert_manager
@@ -213,7 +213,7 @@ resource "local_file" "ssh_config" {
     ssh_key_path   = pathexpand(var.ssh_public_key) != "" ? replace(pathexpand(var.ssh_public_key), ".pub", "") : "~/.ssh/id_ed25519"
     vm_ips         = module.proxmox.vm_ips
   })
-  
+
   filename = "${path.module}/ssh_config"
 }
 

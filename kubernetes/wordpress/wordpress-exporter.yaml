@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress-exporter
+  namespace: wordpress
+  labels:
+    app: wordpress-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress-exporter
+  template:
+    metadata:
+      labels:
+        app: wordpress-exporter
+    spec:
+      containers:
+      - name: wordpress-exporter
+        image: prymitive/apache-exporter:0.13.3
+        args:
+        - --scrape_uri=http://wordpress/server-status?auto
+        - --telemetry.address=:9117
+        ports:
+        - containerPort: 9117
+          name: metrics
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-exporter
+  namespace: wordpress
+  labels:
+    app: wordpress-exporter
+spec:
+  selector:
+    app: wordpress-exporter
+  ports:
+  - port: 9117
+    targetPort: 9117
+    name: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: wordpress-exporter
+  namespace: wordpress
+  labels:
+    app: wordpress-exporter
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: wordpress-exporter
+  endpoints:
+  - port: metrics
+    interval: 15s 

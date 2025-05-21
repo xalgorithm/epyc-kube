@@ -1,0 +1,58 @@
+# Simplified deployment for small clusters
+nginx:
+  service:
+    type: ClusterIP
+
+global:
+  dnsService: "kube-dns"
+  storageClassName: "nfs-client"
+
+resources:
+  small:
+    limits:
+      cpu: 1
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+mimir:
+  singleBinary:
+    enabled: true  # Use single binary mode for simplicity
+    replicas: 1
+    resources:
+      limits:
+        cpu: 1
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+  
+  # Disable complex components for simplicity
+  alertmanager:
+    enabled: false
+  compactor:
+    enabled: false
+  distributor:
+    enabled: false
+  ingester:
+    enabled: false
+  querier:
+    enabled: false
+  query_frontend:
+    enabled: false
+  ruler:
+    enabled: false
+  store_gateway:
+    enabled: false
+
+# Use minimal persisted storage
+metaMonitoring:
+  serviceMonitor:
+    enabled: false
+  grafanaAgent:
+    enabled: false
+  dashboards:
+    enabled: false
+  rules:
+    enabled: false 

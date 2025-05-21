@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: couchdb
+  namespace: obsidian
+  labels:
+    app: couchdb
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: couchdb
+  namespaceSelector:
+    matchNames:
+      - obsidian
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http 

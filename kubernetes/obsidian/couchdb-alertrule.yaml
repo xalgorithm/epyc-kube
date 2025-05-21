@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: couchdb-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: couchdb.rules
+    rules:
+    - alert: CouchDBDown
+      expr: up{namespace="obsidian", app="couchdb"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "CouchDB instance is down"
+        description: "CouchDB instance has been down for more than 5 minutes."
+    - alert: CouchDBHighRequestRate
+      expr: rate(couchdb_httpd_request_count[5m]) > 50
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "CouchDB high request rate"
+        description: "CouchDB is experiencing a high request rate (> 50 req/s) for more than 5 minutes."
+    - alert: CouchDBHighDiskUsage
+      expr: (couchdb_database_disk_size_bytes / 1024 / 1024 / 1024) > 5
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "CouchDB high disk usage"
+        description: "CouchDB database size is larger than 5 GB." 

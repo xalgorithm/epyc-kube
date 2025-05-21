@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: n8n-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: n8n.rules
+    rules:
+    - alert: N8nDown
+      expr: up{namespace="n8n", app="n8n"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "n8n instance is down"
+        description: "n8n instance has been down for more than 5 minutes."
+    - alert: N8nHighErrorRate
+      expr: rate(http_requests_total{namespace="n8n", app="n8n", status_code=~"5.."}[5m]) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "n8n high error rate"
+        description: "n8n is returning a high rate of 5xx errors." 

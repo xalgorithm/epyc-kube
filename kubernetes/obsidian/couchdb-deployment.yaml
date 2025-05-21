@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: couchdb
+  namespace: obsidian
+  labels:
+    app: couchdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: couchdb
+  template:
+    metadata:
+      labels:
+        app: couchdb
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9984"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: couchdb
+        image: couchdb:latest
+        ports:
+        - name: http
+          containerPort: 5984
+        env:
+        - name: COUCHDB_USER
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: username
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: password
+        - name: ERL_FLAGS
+          value: "-setcookie monster"
+        - name: COUCHDB_SECRET
+          value: "supersecretcookie"
+        - name: COUCHDB_CORS_ORIGINS
+          value: "app://obsidian.md http://localhost capacitor://localhost"
+        - name: COUCHDB_CORS_CREDENTIALS
+          value: "true"
+        - name: COUCHDB_CORS_HEADERS
+          value: "accept, authorization, content-type, origin, referer, x-csrf-token, x-requested-with"
+        - name: COUCHDB_CORS_METHODS
+          value: "GET, PUT, POST, HEAD, DELETE"
+        - name: COUCHDB_CORS_MAX_AGE
+          value: "3600"
+        volumeMounts:
+        - name: couchdb-data
+          mountPath: /opt/couchdb/data
+      - name: couchdb-exporter
+        image: gesellix/couchdb-prometheus-exporter:v30.14.0
+        ports:
+        - name: metrics
+          containerPort: 9984
+        env:
+        - name: COUCHDB_URI
+          value: "http://localhost:5984"
+        - name: COUCHDB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: username
+        - name: COUCHDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: couchdb-secret
+              key: password
+        - name: TELEMETRY_ADDRESS
+          value: ":9984"
+      volumes:
+      - name: couchdb-data
+        persistentVolumeClaim:
+          claimName: couchdb-data 

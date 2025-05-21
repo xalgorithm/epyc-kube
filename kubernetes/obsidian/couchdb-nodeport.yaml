@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: couchdb-nodeport
+  namespace: obsidian
+spec:
+  selector:
+    app: couchdb
+  ports:
+  - name: http
+    port: 5984
+    targetPort: 5984
+    nodePort: 31984
+  type: NodePort 

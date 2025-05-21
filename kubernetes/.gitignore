@@ -1,0 +1,13 @@
+# Exclude secrets and sensitive files
+*secret*
+*Secret*
+*password*
+*Password*
+*.key
+*.pem
+*.crt
+
+# Exclude generated/local files
+kubeconfig
+.kube/
+tmp/ 

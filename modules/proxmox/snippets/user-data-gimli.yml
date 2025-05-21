@@ -1,0 +1,70 @@
+#cloud-config
+# Template for generating cloud-init user data
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - nfs-common # Required for NFS mounts
+  - nfs-kernel-server # For NFS server capabilities if needed
+
+runcmd:
+  # Ensure NFS services are enabled and running
+  - systemctl enable rpcbind
+  - systemctl start rpcbind
+  - systemctl enable nfs-common
+  - systemctl start nfs-common
+
+  # Verify NFS client tools are installed properly
+  - echo "Verifying NFS package installation..."
+  - dpkg -l | grep nfs-common || (echo "ERROR: nfs-common package not installed correctly" && exit 1)
+  
+  # Create mount point for potential NFS volumes
+  - mkdir -p /mnt/nfs
+  - chmod 777 /mnt/nfs
+
+  # Install k3s
+  # Create config directory for k3s
+  - mkdir -p /etc/rancher/k3s
+  
+  # Set token in environment variable and in config file
+  - export K3S_TOKEN="9bae5447-e774-423c-b0fb-5d0b4a6012fb"
+  - echo "K3S_TOKEN=9bae5447-e774-423c-b0fb-5d0b4a6012fb" > /etc/rancher/k3s/config.env
+
+  # Determine if this is the init node or a joining node
+  - |
+    if [ "true" = "true" ]; then
+      # Control plane setup
+      echo "K3S_KUBECONFIG_MODE=644" >> /etc/rancher/k3s/config.env
+      export INSTALL_K3S_EXEC="server --cluster-init --flannel-iface=eth1"
+      curl -sfL https://get.k3s.io | sh -
+    else
+      # Worker node setup
+      echo "K3S_URL=https://192.168.100.10:6443" >> /etc/rancher/k3s/config.env
+      export INSTALL_K3S_EXEC="agent --flannel-iface=eth1"
+      curl -sfL https://get.k3s.io | sh -
+    fi
+
+  # Wait a bit for k3s server/agent to settle
+  - sleep 30
+
+  # Create .kube directory for the default user
+  - mkdir -p /home/ubuntu/.kube
+  - |
+    if [ "true" = "true" ]; then
+      cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+      sed -i "s/127.0.0.1/$(hostname -I | awk '{print $1}')/g" /home/ubuntu/.kube/config
+      chown -R ubuntu:ubuntu /home/ubuntu/.kube
+      chmod 600 /home/ubuntu/.kube/config
+    fi
+
+  # Validate that NFS support is working
+  - echo "Validating NFS capabilities..."
+  - showmount --version || echo "WARNING: showmount not available"
+  - echo "NFS setup completed successfully"
+
+# Optional: Write additional files if needed
+# write_files:
+#   - path: /etc/someconfig.conf
+#     content: |
+#       key=value 

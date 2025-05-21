@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obsidian
+  namespace: obsidian
+  labels:
+    app: obsidian
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: obsidian
+  template:
+    metadata:
+      labels:
+        app: obsidian
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+        loki.observability.sidecar/enabled: "true"
+        loki.observability.sidecar/config: "obsidian"
+    spec:
+      containers:
+      - name: obsidian
+        image: ghcr.io/sytone/obsidian-remote:latest
+        ports:
+        - name: http
+          containerPort: 8080
+        - name: https
+          containerPort: 8443
+        env:
+        - name: TZ
+          value: "Etc/UTC"
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        volumeMounts:
+        - name: obsidian-vaults
+          mountPath: /vaults
+        - name: obsidian-config
+          mountPath: /config
+      volumes:
+      - name: obsidian-vaults
+        persistentVolumeClaim:
+          claimName: obsidian-vaults
+      - name: obsidian-config
+        persistentVolumeClaim:
+          claimName: obsidian-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: obsidian
+  namespace: obsidian
+  labels:
+    app: obsidian
+spec:
+  selector:
+    app: obsidian
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  - name: https
+    port: 8443
+    targetPort: 8443
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-vaults
+  namespace: obsidian
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-client
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-config
+  namespace: obsidian
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs-client 

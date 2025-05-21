@@ -1,0 +1,24 @@
+# SSH Config for Kubernetes Nodes
+# Usage: Add to ~/.ssh/config or use with `-F ssh_config` parameter
+
+Host aragorn
+    HostName 107.172.99.213
+    User ubuntu
+    IdentityFile /Users/xalg/.ssh/id_ed25519
+    
+Host gimli
+    HostName 107.172.99.211
+    User ubuntu
+    IdentityFile /Users/xalg/.ssh/id_ed25519
+    
+Host legolas
+    HostName 107.172.99.212
+    User ubuntu
+    IdentityFile /Users/xalg/.ssh/id_ed25519
+    
+# Common options for all hosts
+Host aragorn gimli legolas
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    ServerAliveInterval 60
+    ServerAliveCountMax 5 

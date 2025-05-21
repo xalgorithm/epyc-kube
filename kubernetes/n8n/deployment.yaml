@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: n8n
+  labels:
+    app: n8n
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5678"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: n8n
+        image: n8nio/n8n:latest
+        ports:
+        - name: http
+          containerPort: 5678
+        env:
+        - name: N8N_HOST
+          value: "n8n.local"
+        - name: DB_TYPE
+          valueFrom:
+            secretKeyRef:
+              name: n8n-db-secret
+              key: DB_TYPE
+        - name: DB_SQLITE_PATH
+          valueFrom:
+            secretKeyRef:
+              name: n8n-db-secret
+              key: DB_SQLITE_PATH
+        - name: N8N_PORT
+          value: "5678"
+        - name: N8N_PROTOCOL
+          value: "http"
+        - name: NODE_ENV
+          value: "production"
+        - name: WEBHOOK_URL
+          value: "https://automate.gray-beard.com"
+        - name: N8N_BASIC_AUTH_ACTIVE
+          valueFrom:
+            secretKeyRef:
+              name: n8n-db-secret
+              key: N8N_BASIC_AUTH_ACTIVE
+        - name: N8N_BASIC_AUTH_USER
+          valueFrom:
+            secretKeyRef:
+              name: n8n-db-secret
+              key: N8N_BASIC_AUTH_USER
+        - name: N8N_BASIC_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: n8n-db-secret
+              key: N8N_BASIC_AUTH_PASSWORD
+        - name: N8N_RUNNERS_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: n8n-db-secret
+              key: N8N_RUNNERS_ENABLED
+        - name: N8N_METRICS_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: n8n-db-secret
+              key: N8N_METRICS_ENABLED
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-data 

@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prometheus-alerting-suppress
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: suppress.rules
+    rules:
+    - alert: InfoInhibitor
+      expr: ALERTS{alertname=~"KubeProxyDown|KubeControllerManagerDown|KubeSchedulerDown", alertstate="firing"}
+      labels:
+        alertname: InfoInhibitor
+      annotations:
+        summary: "Suppressed k3s-related alerts"
+        description: "These alerts are suppressed because these components are embedded in k3s and not exposed as separate services." 

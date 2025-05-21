@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: obsidian-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: obsidian.rules
+    rules:
+    - alert: ObsidianDown
+      expr: up{namespace="obsidian", app="obsidian"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Obsidian instance is down"
+        description: "Obsidian instance has been down for more than 5 minutes."
+    - alert: ObsidianHighErrorRate
+      expr: rate(http_requests_total{namespace="obsidian", app="obsidian", status_code=~"5.."}[5m]) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Obsidian high error rate"
+        description: "Obsidian is returning a high rate of 5xx errors." 

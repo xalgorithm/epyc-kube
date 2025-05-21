@@ -1,0 +1,59 @@
+grafana:
+  adminPassword: "${grafana_admin_password}"
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      k8s-system-resources:
+        gnetId: 15759
+        revision: 1
+        datasource: Prometheus
+      k8s-cluster-resources:
+        gnetId: 15760
+        revision: 1
+        datasource: Prometheus
+      k8s-node-resources:
+        gnetId: 15761
+        revision: 1
+        datasource: Prometheus
+      node-exporter-full:
+        gnetId: 1860
+        revision: 30
+        datasource: Prometheus
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki-gateway.monitoring.svc.cluster.local
+    - name: Tempo 
+      type: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3100
+      
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+    remoteWrite:
+      - url: http://mimir-nginx.monitoring.svc.cluster.local/api/v1/push 

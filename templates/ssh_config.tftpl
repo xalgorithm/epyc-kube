@@ -1,0 +1,16 @@
+# SSH Config for Kubernetes Nodes
+# Usage: Add to ~/.ssh/config or use with `-F ssh_config` parameter
+
+%{ for vm_name, vm_ip in vm_ips ~}
+Host ${vm_name}
+    HostName ${vm_ip}
+    User ${vm_user}
+    IdentityFile ${ssh_key_path}
+    
+%{ endfor ~}
+# Common options for all hosts
+Host ${join(" ", keys(vm_definitions))}
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    ServerAliveInterval 60
+    ServerAliveCountMax 5 

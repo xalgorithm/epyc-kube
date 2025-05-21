@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-data
+  namespace: vault
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: nfs-client
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      containers:
+      - name: vault
+        image: vault:1.13.3
+        ports:
+        - containerPort: 8200
+          name: vaultport
+        env:
+        - name: VAULT_LOCAL_CONFIG
+          value: |
+            {
+              "listener": {
+                "tcp": {
+                  "address": "0.0.0.0:8200",
+                  "tls_disable": 1
+                }
+              },
+              "storage": {
+                "file": {
+                  "path": "/vault/data"
+                }
+              },
+              "ui": true
+            }
+        command:
+        - vault
+        - server
+        - -config=/vault/config/vault.json
+        volumeMounts:
+        - name: vault-config
+          mountPath: /vault/config
+        - name: vault-data
+          mountPath: /vault/data
+        securityContext:
+          capabilities:
+            add:
+              - IPC_LOCK
+      volumes:
+      - name: vault-config
+        configMap:
+          name: vault-config
+      - name: vault-data
+        persistentVolumeClaim:
+          claimName: vault-data
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: vault
+data:
+  vault.json: |
+    {
+      "listener": {
+        "tcp": {
+          "address": "0.0.0.0:8200",
+          "tls_disable": 1
+        }
+      },
+      "storage": {
+        "file": {
+          "path": "/vault/data"
+        }
+      },
+      "ui": true
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: vault
+  labels:
+    app: vault
+spec:
+  ports:
+  - port: 8200
+    targetPort: vaultport
+    name: vault
+  selector:
+    app: vault 

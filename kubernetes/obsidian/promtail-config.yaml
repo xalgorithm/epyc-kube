@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: obsidian-log-config
+  namespace: monitoring
+data:
+  obsidian-pipeline.yaml: |
+    pipeline_stages:
+      - match:
+          selector: '{namespace="obsidian"}'
+          stages:
+            - regex:
+                expression: '(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+Z) (?P<level>\w+) (?P<message>.*)'
+            - labels:
+                level:
+                timestamp:
+            - timestamp:
+                source: timestamp
+                format: RFC3339Nano
+            - output:
+                source: message 

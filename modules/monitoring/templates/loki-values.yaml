@@ -1,0 +1,38 @@
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: 'filesystem'
+  schemaConfig:
+    configs:
+      - from: 2020-10-24
+        store: boltdb-shipper
+        object_store: filesystem
+        schema: v11
+        index:
+          prefix: index_
+          period: 24h
+  storageConfig:
+    boltdb_shipper:
+      active_index_directory: /data/loki/boltdb-shipper-active
+      cache_location: /data/loki/boltdb-shipper-cache
+      cache_ttl: 24h
+      shared_store: filesystem
+    filesystem:
+      directory: /data/loki/chunks
+  
+  # Disable scalable components as we're using filesystem storage
+  backend:
+    replicas: 1
+  read:
+    replicas: 1
+  write:
+    replicas: 1
+  
+  # Use the monolithic deployment mode instead of microservices
+  singleBinary:
+    replicas: 1
+    
+gateway:
+  enabled: true 

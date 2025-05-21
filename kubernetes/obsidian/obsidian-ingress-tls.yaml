@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: obsidian-tls
+  namespace: obsidian
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+spec:
+  tls:
+  - hosts:
+    - blackrock.gray-beard.com
+  rules:
+  - host: blackrock.gray-beard.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: obsidian
+            port:
+              number: 8080 

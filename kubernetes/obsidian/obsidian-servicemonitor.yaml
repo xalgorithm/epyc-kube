@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: obsidian
+  namespace: obsidian
+  labels:
+    app: obsidian
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: obsidian
+  namespaceSelector:
+    matchNames:
+      - obsidian
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /metrics
+    scheme: http 

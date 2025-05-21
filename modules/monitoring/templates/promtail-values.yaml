@@ -1,0 +1,8 @@
+config:
+  clients:
+    - url: ${loki_gateway_url}
+  
+  snippets:
+    pipelineStages:
+      - docker: {}
+      - cri: {} 

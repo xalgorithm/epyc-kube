@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-tls
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    # Use Let's Encrypt certificate resolver
+    traefik.ingress.kubernetes.io/router.tls.certresolver: "letsencrypt"
+    # Force HTTPS for this Ingress
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Optionally, if you want to force HTTP->HTTPS redirect
+    traefik.ingress.kubernetes.io/router.middlewares: "kube-system-redirect-https@kubernetescrd"
+spec:
+  tls:
+  - hosts:
+    - grafana.gray-beard.com  # Replace with your actual domain
+  rules:
+  - host: grafana.gray-beard.com  # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: kube-prometheus-stack-grafana
+            port:
+              number: 80
+---
+# HTTP to HTTPS redirect middleware
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: kube-system
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true 

@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: basic-cluster-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: cluster.rules
+    rules:
+    - alert: HighNodeCPU
+      expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage on node {{ $labels.instance }}"
+        description: "Node {{ $labels.instance }} CPU usage is {{ $value }}% for more than 10 minutes"
+        
+    - alert: HighNodeMemory
+      expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage on node {{ $labels.instance }}"
+        description: "Node {{ $labels.instance }} memory usage is {{ $value }}% for more than 10 minutes"
+        
+    - alert: HighNodeDisk
+      expr: (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"})) * 100 > 85
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High disk usage on node {{ $labels.instance }}"
+        description: "Node {{ $labels.instance }} root filesystem is {{ $value }}% full for more than 10 minutes" 

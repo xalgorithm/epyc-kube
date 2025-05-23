@@ -4,7 +4,7 @@ metadata:
   annotations:
     deployment.kubernetes.io/revision: "3"
     kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"wordpress"},"name":"wordpress","namespace":"wordpress"},"spec":{"selector":{"matchLabels":{"app":"wordpress"}},"strategy":{"type":"Recreate"},"template":{"metadata":{"labels":{"app":"wordpress"}},"spec":{"containers":[{"env":[{"name":"WORDPRESS_DB_HOST","value":"wordpress-mysql"},{"name":"WORDPRESS_DB_USER","value":"wordpress"},{"name":"WORDPRESS_DB_PASSWORD","valueFrom":{"secretKeyRef":{"key":"db_password","name":"wordpress-db-credentials"}}},{"name":"WORDPRESS_DB_NAME","value":"wordpress"},{"name":"WORDPRESS_CONFIG_EXTRA","value":"define('WP_HOME', 'https://metaphysicalninja.com');\ndefine('WP_SITEURL', 'https://metaphysicalninja.com');\n"}],"image":"wordpress:6.4.3-apache","livenessProbe":{"failureThreshold":6,"httpGet":{"path":"/","port":80},"initialDelaySeconds":120,"periodSeconds":10,"timeoutSeconds":5},"name":"wordpress","ports":[{"containerPort":80,"name":"wordpress"}],"readinessProbe":{"failureThreshold":6,"httpGet":{"path":"/","port":80},"initialDelaySeconds":30,"periodSeconds":10,"timeoutSeconds":5},"volumeMounts":[{"mountPath":"/var/www/html","name":"wordpress-persistent-storage"}]}],"volumes":[{"name":"wordpress-persistent-storage","persistentVolumeClaim":{"claimName":"wordpress-data"}}]}}}}
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"wordpress"},"name":"wordpress","namespace":"wordpress"},"spec":{"selector":{"matchLabels":{"app":"wordpress"}},"strategy":{"type":"Recreate"},"template":{"metadata":{"labels":{"app":"wordpress"}},"spec":{"containers":[{"env":[{"name":"WORDPRESS_DB_HOST","value":"wordpress-mysql"},{"name":"WORDPRESS_DB_USER","value":"wordpress"},{"name":"WORDPRESS_DB_PASSWORD","valueFrom":{"secretKeyRef":{"key":"db_password","name":"wordpress-db-credentials"}}},{"name":"WORDPRESS_DB_NAME","value":"wordpress"},{"name":"WORDPRESS_CONFIG_EXTRA","value":"define('WP_HOME', 'https://kampfzwerg.gray-beard.com');\ndefine('WP_SITEURL', 'https://kampfzwerg.gray-beard.com');\n"}],"image":"wordpress:6.4.3-apache","livenessProbe":{"failureThreshold":6,"httpGet":{"path":"/","port":80},"initialDelaySeconds":120,"periodSeconds":10,"timeoutSeconds":5},"name":"wordpress","ports":[{"containerPort":80,"name":"wordpress"}],"readinessProbe":{"failureThreshold":6,"httpGet":{"path":"/","port":80},"initialDelaySeconds":30,"periodSeconds":10,"timeoutSeconds":5},"volumeMounts":[{"mountPath":"/var/www/html","name":"wordpress-persistent-storage"}]}],"volumes":[{"name":"wordpress-persistent-storage","persistentVolumeClaim":{"claimName":"wordpress-data"}}]}}}}
   creationTimestamp: "2025-05-21T05:27:54Z"
   generation: 3
   labels:
@@ -74,8 +74,8 @@ spec:
           value: wordpress
         - name: WORDPRESS_CONFIG_EXTRA
           value: |
-            define('WP_HOME', 'https://metaphysicalninja.com');
-            define('WP_SITEURL', 'https://metaphysicalninja.com');
+            define('WP_HOME', 'https://kampfzwerg.gray-beard.com');
+            define('WP_SITEURL', 'https://kampfzwerg.gray-beard.com');
         image: wordpress:6.4.3-apache
         imagePullPolicy: IfNotPresent
         livenessProbe:

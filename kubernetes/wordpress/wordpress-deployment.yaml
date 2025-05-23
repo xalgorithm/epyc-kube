@@ -64,8 +64,8 @@ spec:
           value: wordpress
         - name: WORDPRESS_CONFIG_EXTRA
           value: |
-            define('WP_HOME', 'https://metaphysicalninja.com');
-            define('WP_SITEURL', 'https://metaphysicalninja.com');
+            define('WP_HOME', 'https://kampfzwerg.gray-beard.com');
+            define('WP_SITEURL', 'https://kampfzwerg.gray-beard.com');
         livenessProbe:
           httpGet:
             path: /

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-ntfy-contact-points
+  namespace: monitoring
+  labels:
+    grafana_contact_point: "true"
+data:
+  ntfy-contact-point.yaml: |
+    apiVersion: 1
+    contactPoints:
+      - orgId: 1
+        name: ntfy-alerts
+        receivers:
+          - uid: ntfy-receiver
+            type: webhook
+            settings:
+              url: https://notify.gray-beard.com/grafana-alerts
+              httpMethod: POST
+              maxAlerts: 10
+            disableResolveMessage: false
+    ---
+    apiVersion: 1
+    notificationPolicies:
+      - orgId: 1
+        receiver: ntfy-receiver
+        group_by: ['alertname', 'job']
+        repeat_interval: 30m
+        group_wait: 30s
+        group_interval: 5m
+        routes:
+          - receiver: ntfy-receiver
+            group_by: ['alertname', 'job']
+            matchers:
+              - alertname =~ ".*"
+            continue: false 

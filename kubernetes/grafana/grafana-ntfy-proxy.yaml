@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-ntfy-proxy
+  namespace: monitoring
+  labels:
+    app: grafana-ntfy-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana-ntfy-proxy
+  template:
+    metadata:
+      labels:
+        app: grafana-ntfy-proxy
+    spec:
+      containers:
+      - name: grafana-ntfy-proxy
+        image: alpine:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            apk add --no-cache curl jq 
+            
+            # Create a fifo pipe
+            mkfifo /tmp/webhook_pipe
+            
+            # Start a background process that will read from the pipe and process alerts
+            while true; do
+              cat /tmp/webhook_pipe | while read line; do
+                # Parse Grafana's webhook JSON
+                title=$(echo "$line" | jq -r '.title // "Grafana Alert"')
+                message=$(echo "$line" | jq -r '.message // ""')
+                status=$(echo "$line" | jq -r '.status // "firing"')
+                
+                # Determine alert level for ntfy
+                priority="default"
+                if [ "$status" = "firing" ]; then
+                  priority="high"
+                elif [ "$status" = "resolved" ]; then
+                  priority="low"
+                fi
+                
+                # Send to ntfy with appropriate formatting
+                curl -H "Title: ${title}" \
+                     -H "Priority: ${priority}" \
+                     -H "Tags: ${status},grafana" \
+                     -d "${message}" \
+                     https://notify.gray-beard.com/grafana-alerts
+                
+                echo "Sent alert to ntfy: ${title}"
+              done
+            done &
+            
+            # Start a simple HTTP server that writes POST data to the pipe
+            echo "Starting webhook listener on port 8080"
+            while true; do
+              echo -e "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK" | nc -l -p 8080 -q 1 > /dev/null
+              nc -l -p 8080 | grep -oE '{.+}' > /tmp/webhook_pipe
+            done
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-ntfy-proxy
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana-ntfy-proxy
+  ports:
+  - port: 8080
+    targetPort: http
+    name: http 

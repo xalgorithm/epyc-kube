@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-ntfy-integration
+  namespace: monitoring
+data:
+  contact_points.yaml: |
+    apiVersion: 1
+    contactPoints:
+      - name: ntfy-alerts
+        receivers:
+          - uid: ntfy-receiver
+            type: webhook
+            settings:
+              url: https://notify.gray-beard.com/monitoring-alerts
+              httpMethod: POST
+            disableResolveMessage: false
+            secureFields: {}
+  notification_policies.yaml: |
+    apiVersion: 1
+    policies:
+      - receiver: ntfy-receiver
+        group_by: ['alertname', 'job']
+        repeat_interval: 4h
+        routes:
+          - receiver: ntfy-receiver
+            matchers:
+              - alertname =~ ".*"
+            group_wait: 30s
+            group_interval: 5m
+            repeat_interval: 1h
+            mute_time_intervals: []
+  alert_rules.yaml: |
+    apiVersion: 1
+    groups:
+      - name: test_alerts
+        interval: 1m
+        rules:
+          - name: SystemHealthAlert
+            message: System health check {{ if eq .State "alerting" }}failed{{ else }}recovered{{ end }}
+            data: |
+              {{ range .Alerts }}
+              Alert: {{ .Labels.alertname }}
+              State: {{ .Status }}
+              Severity: {{ .Labels.severity }}
+              Summary: {{ .Annotations.summary }}
+              Description: {{ .Annotations.description }}
+              {{ end }}
+            exec: curl -d "{{ .Message }}" https://notify.gray-beard.com/monitoring-alerts 

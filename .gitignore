@@ -63,3 +63,5 @@ node-token
 Thumbs.db 
 
 wordpress-site/
+
+*.code-workspace

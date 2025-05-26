@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ntfy-test-alert
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: ntfy-test
+    rules:
+    - alert: NtfyTestAlert
+      expr: vector(1)
+      for: 1m
+      labels:
+        severity: info
+        team: test
+      annotations:
+        summary: "Ntfy Test Alert"
+        description: "This is a test alert to verify ntfy notification integration" 

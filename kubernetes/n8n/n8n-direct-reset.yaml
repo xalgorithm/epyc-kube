@@ -1,0 +1,100 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: n8n-direct-reset
+  namespace: n8n
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: n8n-reset
+        image: n8nio/n8n:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Wait for filesystem to be mounted
+          sleep 5
+          
+          # Print directory structure to help diagnose
+          echo "Directory structure:"
+          ls -la /home/node/.n8n/
+          
+          # Check if we're using n8n's own auth or database auth
+          if [ -f /home/node/.n8n/database.sqlite ]; then
+            echo "Found SQLite database, checking tables..."
+            
+            # Install SQLite if needed
+            if ! command -v sqlite3 &> /dev/null; then
+              echo "Installing SQLite..."
+              apt-get update && apt-get install -y sqlite3
+            fi
+            
+            # List tables to diagnose
+            echo "Database tables:"
+            sqlite3 /home/node/.n8n/database.sqlite "SELECT name FROM sqlite_master WHERE type='table';"
+            
+            # Check if user table exists (newer n8n versions)
+            USER_TABLE=$(sqlite3 /home/node/.n8n/database.sqlite "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='user';" 2>/dev/null || echo "0")
+            
+            if [ "$USER_TABLE" -eq "1" ]; then
+              echo "Found user table, updating credentials..."
+              # Update or insert user
+              USER_COUNT=$(sqlite3 /home/node/.n8n/database.sqlite "SELECT COUNT(*) FROM user;" 2>/dev/null || echo "0")
+              
+              if [ "$USER_COUNT" -gt "0" ]; then
+                echo "Updating existing user..."
+                sqlite3 /home/node/.n8n/database.sqlite "UPDATE user SET email='admin@example.com', password='\$2b\$10\$RMC3v.Gq24/Z8y.RSw9U4.c16Lq2t2MX5QzoWvG.KKPgEAjAOmTVS' WHERE id=1;"
+              else
+                echo "Creating new user..."
+                sqlite3 /home/node/.n8n/database.sqlite "INSERT INTO user (email, password, firstName, lastName, isOwner, role, settings) VALUES ('admin@example.com', '\$2b\$10\$RMC3v.Gq24/Z8y.RSw9U4.c16Lq2t2MX5QzoWvG.KKPgEAjAOmTVS', 'Admin', 'User', 1, 'global:owner', '{}');"
+              fi
+            else
+              # Older n8n might use 'auth' table or other mechanisms
+              echo "User table not found. Looking for alternative tables..."
+              
+              # Check for 'auth' table (some versions)
+              AUTH_TABLE=$(sqlite3 /home/node/.n8n/database.sqlite "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='auth';" 2>/dev/null || echo "0")
+              
+              if [ "$AUTH_TABLE" -eq "1" ]; then
+                echo "Found 'auth' table, updating credentials..."
+                sqlite3 /home/node/.n8n/database.sqlite "UPDATE auth SET email='admin@example.com', password='\$2b\$10\$RMC3v.Gq24/Z8y.RSw9U4.c16Lq2t2MX5QzoWvG.KKPgEAjAOmTVS' WHERE id=1;"
+              else
+                echo "No user or auth table found. Trying n8n CLI method..."
+                
+                # For n8n versions that use the CLI for user management
+                if command -v n8n &> /dev/null; then
+                  echo "Using n8n CLI to create user..."
+                  n8n user create --email admin@example.com --firstName Admin --lastName User --password changeme123 --role owner
+                else
+                  echo "n8n CLI not available. Unable to reset credentials via database or CLI methods."
+                  exit 1
+                fi
+              fi
+            fi
+          else
+            echo "SQLite database not found. Trying n8n CLI method..."
+            
+            # For n8n versions that use the CLI for user management
+            if command -v n8n &> /dev/null; then
+              echo "Using n8n CLI to create user..."
+              n8n user create --email admin@example.com --firstName Admin --lastName User --password changeme123 --role owner
+            else
+              echo "n8n CLI not available and no database found. Unable to reset credentials."
+              exit 1
+            fi
+          fi
+          
+          echo "Password reset attempt completed."
+          echo "If successful, you should be able to log in with:"
+          echo "Email: admin@example.com"
+          echo "Password: changeme123"
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-data 

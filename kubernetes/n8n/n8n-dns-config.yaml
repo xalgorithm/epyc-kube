@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-resolv-config
+  namespace: n8n
+data:
+  resolv.conf: |
+    nameserver 8.8.8.8
+    nameserver 8.8.4.4
+    nameserver 1.1.1.1
+    options ndots:5 

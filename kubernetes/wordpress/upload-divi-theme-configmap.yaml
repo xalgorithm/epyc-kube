@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: divi-theme-uploader
+  namespace: wordpress
+data:
+  upload-script.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Install necessary tools
+    apt-get update && apt-get install -y wget unzip curl
+    
+    # Prepare the themes directory
+    mkdir -p /var/www/html/wp-content/themes/Divi
+    
+    # Navigate to temporary directory to save space
+    cd /tmp
+    
+    # Download Divi theme (replace with actual URL if needed)
+    echo "Downloading Divi theme..."
+    # Using wget with the -O flag to name the output file
+    if [ -n "$DIVI_URL" ]; then
+      wget -O Divi.zip "$DIVI_URL"
+    else
+      echo "No DIVI_URL provided. Please mount Divi.zip or provide a download URL."
+      [ -f /divi/Divi.zip ] && cp /divi/Divi.zip .
+    fi
+    
+    # Check if file exists
+    if [ ! -f Divi.zip ]; then
+      echo "Failed to get Divi.zip file. Exiting."
+      exit 1
+    fi
+    
+    # Extract the theme directly to the target directory to avoid using extra memory
+    echo "Extracting Divi theme..."
+    unzip -o Divi.zip -d /var/www/html/wp-content/themes/
+    
+    # Check if extraction was successful
+    if [ ! -d "/var/www/html/wp-content/themes/Divi" ]; then
+      echo "Failed to extract Divi theme. Exiting."
+      exit 1
+    fi
+    
+    # Fix permissions
+    echo "Setting proper permissions..."
+    chown -R www-data:www-data /var/www/html/wp-content/themes/Divi
+    chmod -R 755 /var/www/html/wp-content/themes/Divi
+    
+    # Clean up
+    echo "Cleaning up..."
+    rm Divi.zip
+    
+    echo "Divi theme installed successfully!" 

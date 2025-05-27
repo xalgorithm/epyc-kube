@@ -1,0 +1,125 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data
+  namespace: n8n
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: n8n-db-secret
+  namespace: n8n
+type: Opaque
+data:
+  DB_TYPE: c3FsaXRl  # sqlite
+  DB_SQLITE_PATH: L2hvbWUvbm9kZS8ubjhuL2RhdGFiYXNlLnNxbGl0ZQ==  # /home/node/.n8n/database.sqlite
+  N8N_BASIC_AUTH_ACTIVE: dHJ1ZQ==  # true
+  N8N_BASIC_AUTH_USER: YWRtaW5AZXhhbXBsZS5jb20=  # admin@example.com
+  N8N_BASIC_AUTH_PASSWORD: YWRtaW4=  # admin
+  N8N_RUNNERS_ENABLED: dHJ1ZQ==  # true
+  N8N_HOST: YXV0b21hdGUueGFsZy5pbQ==  # automate.gray-beard.com
+  N8N_PROTOCOL: aHR0cHM=  # https
+  N8N_PORT: NDQz  # 443
+  N8N_WEBHOOK_URL: aHR0cHM6Ly9hdXRvbWF0ZS54YWxnLmlt  # https://automate.gray-beard.com
+  N8N_ENDPOINT_WEBHOOK: d2ViaG9vaw==  # webhook
+  N8N_ENDPOINT_WEBHOOK_TEST: d2ViaG9vay10ZXN0  # webhook-test
+  N8N_DISABLE_PRODUCTION_MAIN_PROCESS: dHJ1ZQ==  # true
+  N8N_USER_FOLDER: L2hvbWUvbm9kZS8ubjhu  # /home/node/.n8n
+  N8N_DIAGNOSTICS_ENABLED: ZmFsc2U=  # false
+  N8N_HIRING_BANNER_ENABLED: ZmFsc2U=  # false
+  N8N_TEMPLATES_ENABLED: ZmFsc2U=  # false
+  N8N_PERSONALIZATION_ENABLED: ZmFsc2U=  # false
+  NODE_TLS_REJECT_UNAUTHORIZED: MQ==  # 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: n8n
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      dnsConfig:
+        nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+          - 1.1.1.1
+        options:
+          - name: ndots
+            value: "5"
+      containers:
+      - name: n8n
+        image: n8nio/n8n:latest
+        ports:
+        - containerPort: 443
+          name: http
+        envFrom:
+        - secretRef:
+            name: n8n-db-secret
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+        - name: resolv-conf
+          mountPath: /etc/resolv.conf
+          subPath: resolv.conf
+      volumes:
+      - name: n8n-data
+        persistentVolumeClaim:
+          claimName: n8n-data
+      - name: resolv-conf
+        configMap:
+          name: n8n-resolv-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n
+  namespace: n8n
+spec:
+  selector:
+    app: n8n
+  ports:
+  - port: 80
+    targetPort: 443
+    name: http
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n
+  namespace: n8n
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: automate.gray-beard.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: n8n
+            port:
+              name: http
+  tls:
+  - hosts:
+    - automate.gray-beard.com
+    secretName: n8n-tls 

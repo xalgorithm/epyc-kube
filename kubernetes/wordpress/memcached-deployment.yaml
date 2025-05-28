@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memcached
+  namespace: wordpress
+  labels:
+    app: memcached
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memcached
+  template:
+    metadata:
+      labels:
+        app: memcached
+    spec:
+      containers:
+      - name: memcached
+        image: memcached:1.6.18-alpine
+        ports:
+        - containerPort: 11211
+          name: memcache
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        args:
+        - -m 256
+        - -I 5m  # Maximum object size (5MB for larger WordPress objects)
+        - -c 1024  # Maximum connections
+        livenessProbe:
+          tcpSocket:
+            port: memcache
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          tcpSocket:
+            port: memcache
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memcached
+  namespace: wordpress
+  labels:
+    app: memcached
+spec:
+  ports:
+  - port: 11211
+    targetPort: memcache
+    name: memcache
+  selector:
+    app: memcached
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: memcached-access
+  namespace: wordpress
+spec:
+  podSelector:
+    matchLabels:
+      app: memcached
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: wordpress
+    ports:
+    - protocol: TCP
+      port: 11211
+  policyTypes:
+  - Ingress 

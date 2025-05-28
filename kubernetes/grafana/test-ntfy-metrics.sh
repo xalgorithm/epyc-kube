@@ -1,6 +1,19 @@
 #!/bin/bash
 
 # Test script to generate metrics for the ntfy dashboard
+# This script requires the ntfy port-forwarding to be active
+# Run ./connect-to-ntfy.sh in another terminal first
+
+# Default ntfy URL (using port-forwarding)
+NTFY_URL=${NTFY_URL:-"http://localhost:8080"}
+
+# Check if ntfy is accessible
+if ! curl -s --connect-timeout 3 ${NTFY_URL} > /dev/null; then
+  echo "Error: Cannot connect to ntfy at ${NTFY_URL}"
+  echo "Please make sure port-forwarding is active by running:"
+  echo "  ./connect-to-ntfy.sh"
+  exit 1
+fi
 
 TOPICS=("test-topic" "monitoring-alerts" "critical-alerts" "system-updates" "user-notifications")
 PRIORITIES=("low" "default" "high" "urgent")
@@ -29,7 +42,7 @@ while [ $(date +%s) -lt $ENDTIME ]; do
   curl -H "Title: $TITLE" \
        -H "Priority: $PRIORITY" \
        -d "$MESSAGE" \
-       https://notify.gray-beard.com/$TOPIC
+       ${NTFY_URL}/$TOPIC
   
   # Random sleep between 1-5 seconds
   SLEEP_TIME=$((1 + $RANDOM % 5))

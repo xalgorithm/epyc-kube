@@ -139,7 +139,7 @@ variable "grafana_admin_password" {
 variable "deploy_nfs_provisioner" {
   description = "Whether to deploy the NFS provisioner. Set to true only if you have an NFS server available."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "deploy_ingress" {

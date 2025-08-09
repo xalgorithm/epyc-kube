@@ -58,31 +58,44 @@ variable "vm_definitions" {
     public_ip  = string # CIDR format e.g., "107.172.99.211/24"
     private_ip = string # CIDR format e.g., "192.168.0.10/24"
     is_control = bool   # Whether this is a control plane node
+    public_gateway = string # Gateway IP for the VM's public network
   }))
   default = {
     "gimli" = {
-      cores      = 4
-      memory     = 8192
-      disk_size  = 128
-      public_ip  = "107.172.99.211/24"
-      private_ip = "192.168.0.10/24"
-      is_control = true
+      cores          = 4
+      memory         = 8192
+      disk_size      = 128
+      public_ip      = "107.172.99.211/24"
+      private_ip     = "192.168.0.10/24"
+      is_control     = true
+      public_gateway = "107.172.99.209"
     }
     "legolas" = {
-      cores      = 4
-      memory     = 8192
-      disk_size  = 128
-      public_ip  = "107.172.99.212/24"
-      private_ip = "192.168.0.11/24"
-      is_control = false
+      cores          = 4
+      memory         = 8192
+      disk_size      = 128
+      public_ip      = "107.172.99.212/24"
+      private_ip     = "192.168.0.11/24"
+      is_control     = false
+      public_gateway = "107.172.99.209"
     }
     "aragorn" = {
-      cores      = 4
-      memory     = 8192
-      disk_size  = 128
-      public_ip  = "107.172.99.213/24"
-      private_ip = "192.168.0.12/24"
-      is_control = false
+      cores          = 4
+      memory         = 8192
+      disk_size      = 128
+      public_ip      = "107.172.99.213/24"
+      private_ip     = "192.168.0.12/24"
+      is_control     = false
+      public_gateway = "107.172.99.209"
+    }
+    "isildur.xalg.im" = {
+      cores          = 8
+      memory         = 24576
+      disk_size      = 128
+      public_ip      = "198.55.108.10/29"
+      private_ip     = "192.168.0.13/24"
+      is_control     = false
+      public_gateway = "198.55.108.9"
     }
   }
 }
@@ -124,9 +137,9 @@ variable "nfs_path" {
 }
 
 variable "metallb_addresses" {
-  description = "IP addresses range for MetalLB to use (can be a single IP with /32, a range, or a CIDR block)"
-  type        = string
-  default     = "107.172.99.214/32"
+  description = "IP address ranges for MetalLB to use (list of CIDRs or /32s)"
+  type        = list(string)
+  default     = ["107.172.99.214/32"]
 }
 
 variable "grafana_admin_password" {

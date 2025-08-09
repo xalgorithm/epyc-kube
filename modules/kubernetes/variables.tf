@@ -9,8 +9,8 @@ variable "kubeconfig_path" {
 }
 
 variable "metallb_addresses" {
-  description = "IP addresses range for MetalLB to use (can be a single IP with /32, a range, or a CIDR block)"
-  type        = string
+  description = "IP address ranges for MetalLB to use (list of CIDRs or /32s)"
+  type        = list(string)
 }
 
 variable "nfs_server" {

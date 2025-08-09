@@ -31,12 +31,13 @@ variable "public_gateway" {
 variable "vm_definitions" {
   description = "Map defining the virtual machines"
   type = map(object({
-    cores       = number
-    memory      = number
-    disk_size   = number
-    public_ip   = string
-    private_ip  = string
-    is_control  = bool
+    cores          = number
+    memory         = number
+    disk_size      = number
+    public_ip      = string
+    private_ip     = string
+    is_control     = bool
+    public_gateway = string
   }))
 }
 

@@ -62,7 +62,7 @@ resource "proxmox_virtual_environment_vm" "k8s_node" {
     ip_config {
       ipv4 {
         address = each.value.public_ip
-        gateway = var.public_gateway
+        gateway = try(each.value.public_gateway, var.public_gateway)
       }
     }
     

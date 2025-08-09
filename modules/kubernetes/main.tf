@@ -63,7 +63,9 @@ resource "local_file" "metallb_config" {
       namespace: metallb-system
     spec:
       addresses:
-      - ${var.metallb_addresses}
+%{ for cidr in var.metallb_addresses ~}
+      - ${cidr}
+%{ endfor ~}
     ---
     apiVersion: metallb.io/v1beta1
     kind: L2Advertisement

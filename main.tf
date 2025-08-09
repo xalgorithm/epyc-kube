@@ -44,7 +44,7 @@ provider "kubernetes" {
   alias = "kubernetes_provider"
 
   # When deploy_kubernetes=false, create a stub configuration that doesn't connect to a real server
-  host     = var.deploy_kubernetes ? "" : "https://localhost:12345"
+  host     = var.deploy_kubernetes ? "" : "https://10.0.1.211:6443"
   insecure = true
 
   # When deploy_kubernetes=true, use the actual kubeconfig
@@ -58,7 +58,7 @@ provider "helm" {
 
   kubernetes {
     # When deploy_kubernetes=false, create a stub configuration that doesn't connect to a real server
-    host     = var.deploy_kubernetes ? "" : "https://localhost:12345"
+    host     = var.deploy_kubernetes ? "" : "https://10.0.1.211:6443"
     insecure = true
 
     # When deploy_kubernetes=true, use the actual kubeconfig

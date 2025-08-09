@@ -65,4 +65,4 @@ Thumbs.db
 wordpress-site/
 
 *.code-workspace
-.kiro
+.*

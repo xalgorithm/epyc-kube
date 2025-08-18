@@ -54,6 +54,14 @@ data:
       SetHandler server-status
       Require all granted
     </Location>
+  custom-php.ini: |
+    ; Custom PHP configuration for WordPress
+    upload_max_filesize = 20M
+    post_max_size = 25M
+    memory_limit = 128M
+    max_execution_time = 300
+    max_input_vars = 3000
+    max_input_time = 300
 ---
 apiVersion: v1
 kind: Service

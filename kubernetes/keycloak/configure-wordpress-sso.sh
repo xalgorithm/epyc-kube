@@ -13,7 +13,7 @@ echo -e "${BLUE}Configuring WordPress with Keycloak SSO${NC}"
 # Configuration variables
 KEYCLOAK_URL="https://login.xalg.im"
 KEYCLOAK_REALM="xalg-apps"
-WORDPRESS_URL="https://blog.xalg.im"
+WORDPRESS_URL="https://kampfzwerg.me"
 WORDPRESS_CLIENT_ID="wordpress"
 WORDPRESS_CLIENT_SECRET=$(openssl rand -hex 16)
 

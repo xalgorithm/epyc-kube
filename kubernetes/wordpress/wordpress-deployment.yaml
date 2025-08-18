@@ -88,6 +88,9 @@ spec:
         - name: apache-config
           mountPath: /etc/apache2/conf-enabled/server-status.conf
           subPath: apache-status.conf
+        - name: apache-config
+          mountPath: /usr/local/etc/php/conf.d/custom-php.ini
+          subPath: custom-php.ini
       volumes:
       - name: wordpress-persistent-storage
         persistentVolumeClaim:

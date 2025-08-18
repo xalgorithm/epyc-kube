@@ -65,4 +65,8 @@ Thumbs.db
 wordpress-site/
 
 *.code-workspace
-.*
+.*# Credentials Security
+.cred-stuff/extracted/
+.env
+*.env
+.kube-credentials.env

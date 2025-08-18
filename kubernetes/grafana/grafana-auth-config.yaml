@@ -5,12 +5,31 @@ metadata:
   namespace: monitoring
 data:
   grafana.ini: |
+    [server]
+    root_url = https://grafana.gray-beard.com
+    serve_from_sub_path = false
+    
     [auth]
     disable_login_form = false
     disable_signout_menu = false
     
     [auth.basic]
     enabled = true
+    
+    [auth.generic_oauth]
+    enabled = true
+    name = Keycloak-OAuth
+    allow_sign_up = true
+    client_id = grafana
+    client_secret = 8e66e24ad167d20622a3dc8ad2c8c8b1
+    scopes = openid email profile offline_access roles
+    email_attribute_path = email
+    login_attribute_path = username
+    name_attribute_path = full_name
+    auth_url = https://login.gray-beard.com/realms/xalg-apps/protocol/openid-connect/auth
+    token_url = https://login.gray-beard.com/realms/xalg-apps/protocol/openid-connect/token
+    api_url = https://login.gray-beard.com/realms/xalg-apps/protocol/openid-connect/userinfo
+    role_attribute_path = contains(roles[*], 'admin') && 'Admin' || contains(roles[*], 'editor') && 'Editor' || 'Viewer'
     
     [users]
     allow_sign_up = false

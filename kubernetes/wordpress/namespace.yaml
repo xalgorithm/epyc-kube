@@ -1,0 +1,9 @@
+# WordPress Namespace Configuration
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ethosenv
+  labels:
+    name: ethosenv
+    app: wordpress
+    environment: production

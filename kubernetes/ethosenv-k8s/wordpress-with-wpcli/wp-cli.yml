@@ -1,0 +1,8 @@
+# WP-CLI Configuration
+path: /var/www/html
+url: https://ethos.gray-beard.com
+user: admin
+core download:
+  locale: en_US
+  version: latest
+  force: false

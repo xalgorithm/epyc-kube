@@ -1,0 +1,20 @@
+# SSL Certificate for ethos.gray-beard.com
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ethos-ssl-cert
+  namespace: ethosenv
+  labels:
+    app: wordpress
+spec:
+  # Secret name where the certificate will be stored
+  secretName: ethos-tls-secret
+  # Certificate issuer reference
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  # Domain names for the certificate
+  dnsNames:
+  - ethos.gray-beard.com
+  # Optional: Add www subdomain
+  # - www.ethos.gray-beard.com

@@ -1,0 +1,29 @@
+# WordPress Ingress Configuration with SSL
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress-ingress
+  namespace: ethosenv
+  labels:
+    app: wordpress
+  annotations:
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - ethos.gray-beard.com
+    secretName: ethos-tls-secret
+  rules:
+  - host: ethos.gray-beard.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wordpress
+            port:
+              number: 80

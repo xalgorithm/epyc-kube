@@ -70,3 +70,20 @@ wordpress-site/
 .env
 *.env
 .kube-credentials.env
+# Exclude secrets and sensitive files
+*secret*
+*Secret*
+*password*
+*Password*
+*.key
+*.pem
+*.crt
+
+# Exclude generated/local files
+kubeconfig
+.kube/
+tmp/ 
+.cred-stuff/
+.cursorrules
+.kiro/
+config/

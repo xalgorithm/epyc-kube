@@ -135,7 +135,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "apache_up{namespace=\"wordpress\"}",
+              "expr": "apache_up{namespace=\"kampfzwerg\"}",
               "interval": "",
               "legendFormat": "Apache Status",
               "refId": "A"
@@ -228,7 +228,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "apache_workers{namespace=\"wordpress\"}",
+              "expr": "apache_workers{namespace=\"kampfzwerg\"}",
               "interval": "",
               "legendFormat": "{{state}}",
               "refId": "A"
@@ -321,7 +321,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "rate(apache_accesses_total{namespace=\"wordpress\"}[5m])",
+              "expr": "rate(apache_accesses_total{namespace=\"kampfzwerg\"}[5m])",
               "interval": "",
               "legendFormat": "Requests/s",
               "refId": "A"
@@ -414,7 +414,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "rate(apache_sent_kilobytes_total{namespace=\"wordpress\"}[5m]) * 1024",
+              "expr": "rate(apache_sent_kilobytes_total{namespace=\"kampfzwerg\"}[5m]) * 1024",
               "interval": "",
               "legendFormat": "Bytes/s",
               "refId": "A"
@@ -520,7 +520,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "mysql_up{namespace=\"wordpress\"}",
+              "expr": "mysql_up{namespace=\"kampfzwerg\"}",
               "interval": "",
               "legendFormat": "MySQL Status",
               "refId": "A"
@@ -613,7 +613,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "mysql_global_status_threads_connected{namespace=\"wordpress\"}",
+              "expr": "mysql_global_status_threads_connected{namespace=\"kampfzwerg\"}",
               "interval": "",
               "legendFormat": "Connected Threads",
               "refId": "A"
@@ -706,7 +706,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "rate(mysql_global_status_questions{namespace=\"wordpress\"}[5m])",
+              "expr": "rate(mysql_global_status_questions{namespace=\"kampfzwerg\"}[5m])",
               "interval": "",
               "legendFormat": "Queries/s",
               "refId": "A"
@@ -799,7 +799,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "mysql_global_status_bytes_sent{namespace=\"wordpress\"}",
+              "expr": "mysql_global_status_bytes_sent{namespace=\"kampfzwerg\"}",
               "interval": "",
               "legendFormat": "Sent",
               "refId": "A"
@@ -809,7 +809,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "mysql_global_status_bytes_received{namespace=\"wordpress\"}",
+              "expr": "mysql_global_status_bytes_received{namespace=\"kampfzwerg\"}",
               "interval": "",
               "legendFormat": "Received",
               "refId": "B"

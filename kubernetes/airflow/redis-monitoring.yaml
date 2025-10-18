@@ -1,0 +1,807 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-monitoring-scripts
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: monitoring
+data:
+  redis-health-check.sh: |
+    #!/bin/bash
+    
+    # Redis Cluster Health Monitoring Script
+    # This script checks the health of Redis Sentinel cluster
+    
+    set -euo pipefail
+    
+    # Configuration
+    NAMESPACE="airflow"
+    REDIS_PASSWORD="${REDIS_PASSWORD:-airflow-redis-2024}"
+    SENTINEL_HOSTS=(
+        "redis-0.redis-headless.airflow.svc.cluster.local:26379"
+        "redis-1.redis-headless.airflow.svc.cluster.local:26379"
+        "redis-2.redis-headless.airflow.svc.cluster.local:26379"
+    )
+    REDIS_HOSTS=(
+        "redis-0.redis-headless.airflow.svc.cluster.local:6379"
+        "redis-1.redis-headless.airflow.svc.cluster.local:6379"
+        "redis-2.redis-headless.airflow.svc.cluster.local:6379"
+    )
+    SERVICE_NAME="mymaster"
+    
+    # Colors for output
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+    
+    # Logging functions
+    log_info() {
+        echo -e "${BLUE}[INFO]${NC} $1"
+    }
+    
+    log_success() {
+        echo -e "${GREEN}[SUCCESS]${NC} $1"
+    }
+    
+    log_warning() {
+        echo -e "${YELLOW}[WARNING]${NC} $1"
+    }
+    
+    log_error() {
+        echo -e "${RED}[ERROR]${NC} $1"
+    }
+    
+    # Check if redis-cli is available
+    check_redis_cli() {
+        if ! command -v redis-cli &> /dev/null; then
+            log_error "redis-cli not found. Please install redis-tools."
+            exit 1
+        fi
+    }
+    
+    # Check Redis instance health
+    check_redis_instance() {
+        local host_port=$1
+        local host=$(echo $host_port | cut -d: -f1)
+        local port=$(echo $host_port | cut -d: -f2)
+        
+        log_info "Checking Redis instance: $host:$port"
+        
+        # Test basic connectivity
+        if redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning ping > /dev/null 2>&1; then
+            log_success "Redis instance $host:$port is responding"
+            
+            # Get instance info
+            local role=$(redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning info replication | grep "role:" | cut -d: -f2 | tr -d '\r')
+            log_info "Role: $role"
+            
+            # Check memory usage
+            local memory_used=$(redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning info memory | grep "used_memory_human:" | cut -d: -f2 | tr -d '\r')
+            log_info "Memory used: $memory_used"
+            
+            # Check connected clients
+            local connected_clients=$(redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning info clients | grep "connected_clients:" | cut -d: -f2 | tr -d '\r')
+            log_info "Connected clients: $connected_clients"
+            
+            return 0
+        else
+            log_error "Redis instance $host:$port is not responding"
+            return 1
+        fi
+    }
+    
+    # Check Sentinel instance health
+    check_sentinel_instance() {
+        local host_port=$1
+        local host=$(echo $host_port | cut -d: -f1)
+        local port=$(echo $host_port | cut -d: -f2)
+        
+        log_info "Checking Sentinel instance: $host:$port"
+        
+        # Test basic connectivity
+        if redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning ping > /dev/null 2>&1; then
+            log_success "Sentinel instance $host:$port is responding"
+            
+            # Get master info
+            local master_info=$(redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning sentinel masters | head -20)
+            if [[ -n "$master_info" ]]; then
+                log_info "Master information available"
+            else
+                log_warning "No master information found"
+            fi
+            
+            # Check if master is known
+            local master_addr=$(redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning sentinel get-master-addr-by-name "$SERVICE_NAME" 2>/dev/null || echo "")
+            if [[ -n "$master_addr" ]]; then
+                log_success "Master address: $master_addr"
+            else
+                log_error "Master not found by Sentinel"
+                return 1
+            fi
+            
+            return 0
+        else
+            log_error "Sentinel instance $host:$port is not responding"
+            return 1
+        fi
+    }
+    
+    # Check cluster consensus
+    check_cluster_consensus() {
+        log_info "Checking cluster consensus..."
+        
+        local master_addresses=()
+        local consensus_count=0
+        
+        for sentinel_host in "${SENTINEL_HOSTS[@]}"; do
+            local host=$(echo $sentinel_host | cut -d: -f1)
+            local port=$(echo $sentinel_host | cut -d: -f2)
+            
+            local master_addr=$(redis-cli -h "$host" -p "$port" -a "$REDIS_PASSWORD" --no-auth-warning sentinel get-master-addr-by-name "$SERVICE_NAME" 2>/dev/null || echo "")
+            if [[ -n "$master_addr" ]]; then
+                master_addresses+=("$master_addr")
+                ((consensus_count++))
+            fi
+        done
+        
+        if [[ $consensus_count -ge 2 ]]; then
+            # Check if all sentinels agree on master
+            local unique_masters=$(printf '%s\n' "${master_addresses[@]}" | sort -u | wc -l)
+            if [[ $unique_masters -eq 1 ]]; then
+                log_success "Cluster consensus achieved: ${master_addresses[0]}"
+                return 0
+            else
+                log_error "Split-brain detected: Multiple masters reported"
+                printf '%s\n' "${master_addresses[@]}" | sort -u
+                return 1
+            fi
+        else
+            log_error "Insufficient Sentinel nodes for consensus ($consensus_count/3)"
+            return 1
+        fi
+    }
+    
+    # Test failover capability
+    test_failover() {
+        log_info "Testing failover capability (dry run)..."
+        
+        # Get current master
+        local master_addr=$(redis-cli -h "${SENTINEL_HOSTS[0]%:*}" -p "${SENTINEL_HOSTS[0]#*:}" -a "$REDIS_PASSWORD" --no-auth-warning sentinel get-master-addr-by-name "$SERVICE_NAME" 2>/dev/null || echo "")
+        
+        if [[ -n "$master_addr" ]]; then
+            log_info "Current master: $master_addr"
+            
+            # Check if we can perform a failover (without actually doing it)
+            local can_failover=$(redis-cli -h "${SENTINEL_HOSTS[0]%:*}" -p "${SENTINEL_HOSTS[0]#*:}" -a "$REDIS_PASSWORD" --no-auth-warning sentinel ckquorum "$SERVICE_NAME" 2>/dev/null || echo "")
+            
+            if [[ "$can_failover" == *"OK"* ]]; then
+                log_success "Failover capability verified"
+                return 0
+            else
+                log_warning "Failover capability uncertain"
+                return 1
+            fi
+        else
+            log_error "Cannot determine current master for failover test"
+            return 1
+        fi
+    }
+    
+    # Performance test
+    performance_test() {
+        log_info "Running performance test..."
+        
+        # Get master address
+        local master_addr=$(redis-cli -h "${SENTINEL_HOSTS[0]%:*}" -p "${SENTINEL_HOSTS[0]#*:}" -a "$REDIS_PASSWORD" --no-auth-warning sentinel get-master-addr-by-name "$SERVICE_NAME" 2>/dev/null || echo "")
+        
+        if [[ -n "$master_addr" ]]; then
+            local master_host=$(echo $master_addr | cut -d' ' -f1)
+            local master_port=$(echo $master_addr | cut -d' ' -f2)
+            
+            log_info "Testing performance on master: $master_host:$master_port"
+            
+            # Simple benchmark
+            local benchmark_result=$(redis-cli -h "$master_host" -p "$master_port" -a "$REDIS_PASSWORD" --no-auth-warning --latency-history -i 1 2>/dev/null | head -5 || echo "Benchmark failed")
+            
+            if [[ "$benchmark_result" != "Benchmark failed" ]]; then
+                log_success "Performance test completed"
+                echo "$benchmark_result"
+            else
+                log_warning "Performance test failed"
+            fi
+        else
+            log_error "Cannot determine master for performance test"
+        fi
+    }
+    
+    # Generate health report
+    generate_health_report() {
+        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        local report_file="/tmp/redis-health-report-$(date +%Y%m%d-%H%M%S).txt"
+        
+        {
+            echo "Redis Cluster Health Report"
+            echo "Generated: $timestamp"
+            echo "=================================="
+            echo ""
+            
+            echo "Redis Instances:"
+            for redis_host in "${REDIS_HOSTS[@]}"; do
+                echo "- $redis_host"
+                if check_redis_instance "$redis_host" &>/dev/null; then
+                    echo "  Status: HEALTHY"
+                else
+                    echo "  Status: UNHEALTHY"
+                fi
+            done
+            echo ""
+            
+            echo "Sentinel Instances:"
+            for sentinel_host in "${SENTINEL_HOSTS[@]}"; do
+                echo "- $sentinel_host"
+                if check_sentinel_instance "$sentinel_host" &>/dev/null; then
+                    echo "  Status: HEALTHY"
+                else
+                    echo "  Status: UNHEALTHY"
+                fi
+            done
+            echo ""
+            
+            echo "Cluster Status:"
+            if check_cluster_consensus &>/dev/null; then
+                echo "- Consensus: ACHIEVED"
+            else
+                echo "- Consensus: FAILED"
+            fi
+            
+            if test_failover &>/dev/null; then
+                echo "- Failover: READY"
+            else
+                echo "- Failover: NOT READY"
+            fi
+            
+        } > "$report_file"
+        
+        log_success "Health report generated: $report_file"
+        cat "$report_file"
+    }
+    
+    # Main function
+    main() {
+        log_info "Starting Redis cluster health check..."
+        
+        check_redis_cli
+        
+        local overall_health=0
+        
+        # Check all Redis instances
+        log_info "=== Checking Redis Instances ==="
+        for redis_host in "${REDIS_HOSTS[@]}"; do
+            if ! check_redis_instance "$redis_host"; then
+                overall_health=1
+            fi
+            echo ""
+        done
+        
+        # Check all Sentinel instances
+        log_info "=== Checking Sentinel Instances ==="
+        for sentinel_host in "${SENTINEL_HOSTS[@]}"; do
+            if ! check_sentinel_instance "$sentinel_host"; then
+                overall_health=1
+            fi
+            echo ""
+        done
+        
+        # Check cluster consensus
+        log_info "=== Checking Cluster Consensus ==="
+        if ! check_cluster_consensus; then
+            overall_health=1
+        fi
+        echo ""
+        
+        # Test failover capability
+        log_info "=== Testing Failover Capability ==="
+        if ! test_failover; then
+            overall_health=1
+        fi
+        echo ""
+        
+        # Performance test
+        log_info "=== Performance Test ==="
+        performance_test
+        echo ""
+        
+        # Generate report
+        log_info "=== Health Report ==="
+        generate_health_report
+        
+        if [[ $overall_health -eq 0 ]]; then
+            log_success "Overall cluster health: HEALTHY"
+            exit 0
+        else
+            log_error "Overall cluster health: UNHEALTHY"
+            exit 1
+        fi
+    }
+    
+    # Handle command line arguments
+    case "${1:-health}" in
+        "health"|"check")
+            main
+            ;;
+        "report")
+            generate_health_report
+            ;;
+        "consensus")
+            check_cluster_consensus
+            ;;
+        "failover-test")
+            test_failover
+            ;;
+        "performance")
+            performance_test
+            ;;
+        *)
+            echo "Usage: $0 {health|check|report|consensus|failover-test|performance}"
+            echo ""
+            echo "Commands:"
+            echo "  health        - Full health check (default)"
+            echo "  check         - Alias for health"
+            echo "  report        - Generate health report only"
+            echo "  consensus     - Check cluster consensus only"
+            echo "  failover-test - Test failover capability only"
+            echo "  performance   - Run performance test only"
+            exit 1
+            ;;
+    esac
+  
+  redis-metrics-exporter.py: |
+    #!/usr/bin/env python3
+    """
+    Redis Metrics Exporter for Prometheus
+    
+    This script exports Redis cluster metrics in Prometheus format
+    for monitoring and alerting.
+    """
+    
+    import redis
+    import redis.sentinel
+    import time
+    import json
+    import logging
+    from typing import Dict, List, Any, Optional
+    from prometheus_client import start_http_server, Gauge, Counter, Info
+    import os
+    
+    # Configure logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    # Prometheus metrics
+    redis_up = Gauge('redis_up', 'Redis instance availability', ['instance', 'role'])
+    redis_connected_clients = Gauge('redis_connected_clients', 'Number of connected clients', ['instance'])
+    redis_used_memory = Gauge('redis_used_memory_bytes', 'Used memory in bytes', ['instance'])
+    redis_used_memory_peak = Gauge('redis_used_memory_peak_bytes', 'Peak used memory in bytes', ['instance'])
+    redis_keyspace_hits = Counter('redis_keyspace_hits_total', 'Number of keyspace hits', ['instance'])
+    redis_keyspace_misses = Counter('redis_keyspace_misses_total', 'Number of keyspace misses', ['instance'])
+    redis_commands_processed = Counter('redis_commands_processed_total', 'Number of commands processed', ['instance'])
+    redis_connections_received = Counter('redis_connections_received_total', 'Number of connections received', ['instance'])
+    redis_expired_keys = Counter('redis_expired_keys_total', 'Number of expired keys', ['instance'])
+    redis_evicted_keys = Counter('redis_evicted_keys_total', 'Number of evicted keys', ['instance'])
+    redis_replication_lag = Gauge('redis_replication_lag_seconds', 'Replication lag in seconds', ['instance'])
+    
+    # Sentinel metrics
+    sentinel_up = Gauge('redis_sentinel_up', 'Sentinel instance availability', ['instance'])
+    sentinel_masters = Gauge('redis_sentinel_masters', 'Number of masters monitored', ['instance'])
+    sentinel_master_ok = Gauge('redis_sentinel_master_ok', 'Master status (1=ok, 0=down)', ['master_name'])
+    
+    class RedisMetricsExporter:
+        """Redis metrics exporter for Prometheus."""
+        
+        def __init__(self):
+            self.redis_hosts = [
+                ('redis-0.redis-headless.airflow.svc.cluster.local', 6379),
+                ('redis-1.redis-headless.airflow.svc.cluster.local', 6379),
+                ('redis-2.redis-headless.airflow.svc.cluster.local', 6379)
+            ]
+            
+            self.sentinel_hosts = [
+                ('redis-0.redis-headless.airflow.svc.cluster.local', 26379),
+                ('redis-1.redis-headless.airflow.svc.cluster.local', 26379),
+                ('redis-2.redis-headless.airflow.svc.cluster.local', 26379)
+            ]
+            
+            self.password = os.getenv('REDIS_PASSWORD', 'airflow-redis-2024')
+            self.service_name = 'mymaster'
+            
+            # Initialize Sentinel
+            self.sentinel = redis.sentinel.Sentinel(
+                self.sentinel_hosts,
+                socket_timeout=0.5,
+                password=self.password
+            )
+        
+        def collect_redis_metrics(self):
+            """Collect metrics from Redis instances."""
+            for host, port in self.redis_hosts:
+                instance_label = f"{host}:{port}"
+                
+                try:
+                    # Connect to Redis instance
+                    r = redis.Redis(host=host, port=port, password=self.password, 
+                                  socket_timeout=1.0, socket_connect_timeout=1.0)
+                    
+                    # Test connection
+                    r.ping()
+                    
+                    # Get instance info
+                    info = r.info()
+                    
+                    # Basic availability
+                    redis_up.labels(instance=instance_label, role=info.get('role', 'unknown')).set(1)
+                    
+                    # Connection metrics
+                    redis_connected_clients.labels(instance=instance_label).set(
+                        info.get('connected_clients', 0)
+                    )
+                    
+                    # Memory metrics
+                    redis_used_memory.labels(instance=instance_label).set(
+                        info.get('used_memory', 0)
+                    )
+                    redis_used_memory_peak.labels(instance=instance_label).set(
+                        info.get('used_memory_peak', 0)
+                    )
+                    
+                    # Command metrics
+                    redis_keyspace_hits.labels(instance=instance_label)._value._value = info.get('keyspace_hits', 0)
+                    redis_keyspace_misses.labels(instance=instance_label)._value._value = info.get('keyspace_misses', 0)
+                    redis_commands_processed.labels(instance=instance_label)._value._value = info.get('total_commands_processed', 0)
+                    redis_connections_received.labels(instance=instance_label)._value._value = info.get('total_connections_received', 0)
+                    redis_expired_keys.labels(instance=instance_label)._value._value = info.get('expired_keys', 0)
+                    redis_evicted_keys.labels(instance=instance_label)._value._value = info.get('evicted_keys', 0)
+                    
+                    # Replication metrics
+                    if info.get('role') == 'slave':
+                        repl_info = r.info('replication')
+                        lag = repl_info.get('master_repl_offset', 0) - repl_info.get('slave_repl_offset', 0)
+                        redis_replication_lag.labels(instance=instance_label).set(max(0, lag))
+                    
+                    logger.debug(f"Collected metrics from Redis {instance_label}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to collect metrics from Redis {instance_label}: {e}")
+                    redis_up.labels(instance=instance_label, role='unknown').set(0)
+        
+        def collect_sentinel_metrics(self):
+            """Collect metrics from Sentinel instances."""
+            for host, port in self.sentinel_hosts:
+                instance_label = f"{host}:{port}"
+                
+                try:
+                    # Connect to Sentinel instance
+                    s = redis.Redis(host=host, port=port, password=self.password,
+                                  socket_timeout=1.0, socket_connect_timeout=1.0)
+                    
+                    # Test connection
+                    s.ping()
+                    sentinel_up.labels(instance=instance_label).set(1)
+                    
+                    # Get masters info
+                    masters = s.execute_command('SENTINEL', 'masters')
+                    if masters:
+                        sentinel_masters.labels(instance=instance_label).set(len(masters) // 10)  # Each master has 10 fields
+                        
+                        # Check master status
+                        try:
+                            master_addr = s.execute_command('SENTINEL', 'get-master-addr-by-name', self.service_name)
+                            if master_addr:
+                                sentinel_master_ok.labels(master_name=self.service_name).set(1)
+                            else:
+                                sentinel_master_ok.labels(master_name=self.service_name).set(0)
+                        except Exception as e:
+                            logger.warning(f"Failed to get master status from Sentinel {instance_label}: {e}")
+                            sentinel_master_ok.labels(master_name=self.service_name).set(0)
+                    
+                    logger.debug(f"Collected metrics from Sentinel {instance_label}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to collect metrics from Sentinel {instance_label}: {e}")
+                    sentinel_up.labels(instance=instance_label).set(0)
+        
+        def collect_all_metrics(self):
+            """Collect all metrics."""
+            try:
+                self.collect_redis_metrics()
+                self.collect_sentinel_metrics()
+                logger.info("Metrics collection completed")
+            except Exception as e:
+                logger.error(f"Error during metrics collection: {e}")
+        
+        def start_metrics_server(self, port: int = 8080):
+            """Start Prometheus metrics server."""
+            start_http_server(port)
+            logger.info(f"Metrics server started on port {port}")
+            
+            while True:
+                self.collect_all_metrics()
+                time.sleep(30)  # Collect metrics every 30 seconds
+    
+    def main():
+        """Main function."""
+        exporter = RedisMetricsExporter()
+        
+        # Start metrics server
+        port = int(os.getenv('METRICS_PORT', '8080'))
+        exporter.start_metrics_server(port)
+    
+    if __name__ == '__main__':
+        main()
+  
+  redis-cluster-monitor.py: |
+    #!/usr/bin/env python3
+    """
+    Redis Cluster Monitoring Dashboard
+    
+    This script provides a real-time monitoring dashboard
+    for the Redis Sentinel cluster.
+    """
+    
+    import redis
+    import redis.sentinel
+    import time
+    import json
+    import os
+    import sys
+    from datetime import datetime
+    from typing import Dict, List, Any, Optional
+    
+    class RedisClusterMonitor:
+        """Real-time Redis cluster monitor."""
+        
+        def __init__(self):
+            self.sentinel_hosts = [
+                ('redis-0.redis-headless.airflow.svc.cluster.local', 26379),
+                ('redis-1.redis-headless.airflow.svc.cluster.local', 26379),
+                ('redis-2.redis-headless.airflow.svc.cluster.local', 26379)
+            ]
+            
+            self.redis_hosts = [
+                ('redis-0.redis-headless.airflow.svc.cluster.local', 6379),
+                ('redis-1.redis-headless.airflow.svc.cluster.local', 6379),
+                ('redis-2.redis-headless.airflow.svc.cluster.local', 6379)
+            ]
+            
+            self.password = os.getenv('REDIS_PASSWORD', 'airflow-redis-2024')
+            self.service_name = 'mymaster'
+            
+            # Initialize Sentinel
+            try:
+                self.sentinel = redis.sentinel.Sentinel(
+                    self.sentinel_hosts,
+                    socket_timeout=0.5,
+                    password=self.password
+                )
+            except Exception as e:
+                print(f"Failed to initialize Sentinel: {e}")
+                sys.exit(1)
+        
+        def get_cluster_status(self) -> Dict[str, Any]:
+            """Get comprehensive cluster status."""
+            status = {
+                'timestamp': datetime.now().isoformat(),
+                'sentinel_nodes': [],
+                'redis_nodes': [],
+                'master_info': None,
+                'cluster_health': 'unknown',
+                'alerts': []
+            }
+            
+            # Check Sentinel nodes
+            healthy_sentinels = 0
+            for host, port in self.sentinel_hosts:
+                node_status = {
+                    'host': host,
+                    'port': port,
+                    'status': 'unknown',
+                    'error': None
+                }
+                
+                try:
+                    s = redis.Redis(host=host, port=port, password=self.password, socket_timeout=1.0)
+                    s.ping()
+                    node_status['status'] = 'healthy'
+                    healthy_sentinels += 1
+                    
+                    # Get master info from this sentinel
+                    try:
+                        master_addr = s.execute_command('SENTINEL', 'get-master-addr-by-name', self.service_name)
+                        if master_addr and not status['master_info']:
+                            status['master_info'] = {
+                                'host': master_addr[0],
+                                'port': master_addr[1],
+                                'discovered_by': f"{host}:{port}"
+                            }
+                    except Exception as e:
+                        node_status['error'] = f"Failed to get master info: {e}"
+                
+                except Exception as e:
+                    node_status['status'] = 'unhealthy'
+                    node_status['error'] = str(e)
+                
+                status['sentinel_nodes'].append(node_status)
+            
+            # Check Redis nodes
+            healthy_redis = 0
+            master_count = 0
+            slave_count = 0
+            
+            for host, port in self.redis_hosts:
+                node_status = {
+                    'host': host,
+                    'port': port,
+                    'status': 'unknown',
+                    'role': 'unknown',
+                    'memory_used': 0,
+                    'connected_clients': 0,
+                    'error': None
+                }
+                
+                try:
+                    r = redis.Redis(host=host, port=port, password=self.password, socket_timeout=1.0)
+                    r.ping()
+                    node_status['status'] = 'healthy'
+                    healthy_redis += 1
+                    
+                    # Get node info
+                    info = r.info()
+                    node_status['role'] = info.get('role', 'unknown')
+                    node_status['memory_used'] = info.get('used_memory_human', '0B')
+                    node_status['connected_clients'] = info.get('connected_clients', 0)
+                    
+                    if node_status['role'] == 'master':
+                        master_count += 1
+                    elif node_status['role'] == 'slave':
+                        slave_count += 1
+                
+                except Exception as e:
+                    node_status['status'] = 'unhealthy'
+                    node_status['error'] = str(e)
+                
+                status['redis_nodes'].append(node_status)
+            
+            # Determine overall cluster health
+            if healthy_sentinels >= 2 and healthy_redis >= 2 and master_count == 1:
+                status['cluster_health'] = 'healthy'
+            elif healthy_sentinels >= 2 and healthy_redis >= 1:
+                status['cluster_health'] = 'degraded'
+                status['alerts'].append('Some Redis nodes are unhealthy')
+            else:
+                status['cluster_health'] = 'critical'
+                status['alerts'].append('Insufficient healthy nodes for operation')
+            
+            # Additional health checks
+            if master_count == 0:
+                status['alerts'].append('No master node found')
+            elif master_count > 1:
+                status['alerts'].append('Multiple masters detected (split-brain)')
+            
+            if healthy_sentinels < 2:
+                status['alerts'].append('Insufficient Sentinel nodes for quorum')
+            
+            return status
+        
+        def print_status_dashboard(self, status: Dict[str, Any]):
+            """Print formatted status dashboard."""
+            # Clear screen
+            os.system('clear' if os.name == 'posix' else 'cls')
+            
+            print("=" * 80)
+            print("REDIS CLUSTER MONITORING DASHBOARD")
+            print("=" * 80)
+            print(f"Last Updated: {status['timestamp']}")
+            print(f"Cluster Health: {status['cluster_health'].upper()}")
+            print()
+            
+            # Alerts
+            if status['alerts']:
+                print("🚨 ALERTS:")
+                for alert in status['alerts']:
+                    print(f"  - {alert}")
+                print()
+            
+            # Master info
+            if status['master_info']:
+                print("📍 CURRENT MASTER:")
+                master = status['master_info']
+                print(f"  Host: {master['host']}:{master['port']}")
+                print(f"  Discovered by: {master['discovered_by']}")
+                print()
+            
+            # Sentinel nodes
+            print("🔍 SENTINEL NODES:")
+            for node in status['sentinel_nodes']:
+                status_icon = "✅" if node['status'] == 'healthy' else "❌"
+                print(f"  {status_icon} {node['host']}:{node['port']} - {node['status']}")
+                if node['error']:
+                    print(f"      Error: {node['error']}")
+            print()
+            
+            # Redis nodes
+            print("💾 REDIS NODES:")
+            for node in status['redis_nodes']:
+                status_icon = "✅" if node['status'] == 'healthy' else "❌"
+                role_icon = "👑" if node['role'] == 'master' else "👥" if node['role'] == 'slave' else "❓"
+                print(f"  {status_icon} {role_icon} {node['host']}:{node['port']} - {node['status']} ({node['role']})")
+                if node['status'] == 'healthy':
+                    print(f"      Memory: {node['memory_used']}, Clients: {node['connected_clients']}")
+                if node['error']:
+                    print(f"      Error: {node['error']}")
+            print()
+            
+            print("=" * 80)
+            print("Press Ctrl+C to exit")
+        
+        def run_dashboard(self, refresh_interval: int = 5):
+            """Run the monitoring dashboard."""
+            try:
+                while True:
+                    status = self.get_cluster_status()
+                    self.print_status_dashboard(status)
+                    time.sleep(refresh_interval)
+            except KeyboardInterrupt:
+                print("\nMonitoring stopped.")
+                sys.exit(0)
+            except Exception as e:
+                print(f"Error in monitoring dashboard: {e}")
+                sys.exit(1)
+        
+        def export_status_json(self, output_file: str = None):
+            """Export cluster status to JSON file."""
+            status = self.get_cluster_status()
+            
+            if output_file is None:
+                timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+                output_file = f"/tmp/redis-cluster-status-{timestamp}.json"
+            
+            try:
+                with open(output_file, 'w') as f:
+                    json.dump(status, f, indent=2)
+                print(f"Status exported to: {output_file}")
+            except Exception as e:
+                print(f"Failed to export status: {e}")
+                sys.exit(1)
+    
+    def main():
+        """Main function."""
+        monitor = RedisClusterMonitor()
+        
+        if len(sys.argv) > 1:
+            command = sys.argv[1]
+            
+            if command == 'dashboard':
+                refresh_interval = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+                monitor.run_dashboard(refresh_interval)
+            elif command == 'status':
+                status = monitor.get_cluster_status()
+                print(json.dumps(status, indent=2))
+            elif command == 'export':
+                output_file = sys.argv[2] if len(sys.argv) > 2 else None
+                monitor.export_status_json(output_file)
+            else:
+                print("Usage: python redis-cluster-monitor.py {dashboard|status|export} [options]")
+                print("")
+                print("Commands:")
+                print("  dashboard [interval]  - Run real-time dashboard (default interval: 5s)")
+                print("  status               - Print current status as JSON")
+                print("  export [file]        - Export status to JSON file")
+                sys.exit(1)
+        else:
+            # Default to dashboard
+            monitor.run_dashboard()
+    
+    if __name__ == '__main__':
+        main()

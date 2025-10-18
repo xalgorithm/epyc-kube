@@ -88,15 +88,6 @@ variable "vm_definitions" {
       is_control     = false
       public_gateway = "10.0.1.209"
     }
-    "isildur.gray-beard.com" = {
-      cores          = 8
-      memory         = 24576
-      disk_size      = 128
-      public_ip      = "10.0.2.10/29"
-      private_ip     = "192.168.100.13/24"
-      is_control     = false
-      public_gateway = "10.0.2.9"
-    }
   }
 }
 

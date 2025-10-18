@@ -1,0 +1,262 @@
+# Airflow Namespace and RBAC Configuration
+# This file consolidates namespace creation, service accounts, and RBAC policies
+# for the Airflow deployment with minimal required permissions
+
+---
+# Namespace Definition
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: airflow
+  labels:
+    name: airflow
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: namespace
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+---
+# ServiceAccount for Airflow Webserver
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: airflow-webserver
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: webserver
+automountServiceAccountToken: true
+
+---
+# ServiceAccount for Airflow Scheduler
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: airflow-scheduler
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: scheduler
+automountServiceAccountToken: true
+
+---
+# ServiceAccount for Airflow Workers
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: airflow-worker
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: worker
+automountServiceAccountToken: true
+
+---
+# ServiceAccount for Airflow Triggerer
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: airflow-triggerer
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: triggerer
+automountServiceAccountToken: true
+
+---
+# Role for Airflow Scheduler - needs to manage pods for KubernetesExecutor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow-scheduler
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: scheduler
+rules:
+# Pod management for KubernetesExecutor
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create", "get"]
+# ConfigMap access for DAG configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Secret access for connections and variables
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+# Service access for service discovery
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+# Event creation for logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+# Role for Airflow Workers - minimal permissions for task execution
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow-worker
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: worker
+rules:
+# ConfigMap access for task configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Secret access for connections
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+# Pod access for self-inspection
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+# Event creation for logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+# Role for Airflow Webserver - read-only access for UI
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow-webserver
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: webserver
+rules:
+# ConfigMap access for configuration display
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Secret access for connection testing (read-only)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+# Pod access for log viewing and task monitoring
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+# Service access for health checks
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+
+---
+# Role for Airflow Triggerer - minimal permissions for deferrable tasks
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow-triggerer
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: triggerer
+rules:
+# ConfigMap access for configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Secret access for connections
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+# Event creation for logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+# RoleBinding for Airflow Scheduler
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: airflow-scheduler
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: scheduler
+subjects:
+- kind: ServiceAccount
+  name: airflow-scheduler
+  namespace: airflow
+roleRef:
+  kind: Role
+  name: airflow-scheduler
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding for Airflow Workers
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: airflow-worker
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: worker
+subjects:
+- kind: ServiceAccount
+  name: airflow-worker
+  namespace: airflow
+roleRef:
+  kind: Role
+  name: airflow-worker
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding for Airflow Webserver
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: airflow-webserver
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: webserver
+subjects:
+- kind: ServiceAccount
+  name: airflow-webserver
+  namespace: airflow
+roleRef:
+  kind: Role
+  name: airflow-webserver
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding for Airflow Triggerer
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: airflow-triggerer
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: triggerer
+subjects:
+- kind: ServiceAccount
+  name: airflow-triggerer
+  namespace: airflow
+roleRef:
+  kind: Role
+  name: airflow-triggerer
+  apiGroup: rbac.authorization.k8s.io

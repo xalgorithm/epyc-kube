@@ -27,5 +27,5 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 10Gi
   storageClassName: nfs-client  # Adjust based on your storage class

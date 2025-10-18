@@ -1,0 +1,356 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-connection-pool
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: connection-pool
+data:
+  connection-pool.py: |
+    #!/usr/bin/env python3
+    """
+    Redis Connection Pool and Failover Logic for Airflow
+    
+    This module provides connection pooling and automatic failover
+    capabilities for Redis Sentinel cluster used by Airflow.
+    """
+    
+    import redis
+    import redis.sentinel
+    import logging
+    import time
+    from typing import Optional, List, Dict, Any
+    from contextlib import contextmanager
+    
+    # Configure logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    class RedisConnectionPool:
+        """Redis connection pool with Sentinel support and failover logic."""
+        
+        def __init__(self, 
+                     sentinel_hosts: List[tuple] = None,
+                     service_name: str = 'mymaster',
+                     password: str = None,
+                     socket_timeout: float = 0.5,
+                     socket_connect_timeout: float = 0.5,
+                     socket_keepalive: bool = True,
+                     socket_keepalive_options: Dict[str, Any] = None,
+                     connection_pool_kwargs: Dict[str, Any] = None,
+                     sentinel_kwargs: Dict[str, Any] = None):
+            """
+            Initialize Redis connection pool with Sentinel.
+            
+            Args:
+                sentinel_hosts: List of (host, port) tuples for Sentinel nodes
+                service_name: Name of the Redis service in Sentinel
+                password: Redis password
+                socket_timeout: Socket timeout in seconds
+                socket_connect_timeout: Socket connection timeout in seconds
+                socket_keepalive: Enable socket keepalive
+                socket_keepalive_options: Socket keepalive options
+                connection_pool_kwargs: Additional connection pool arguments
+                sentinel_kwargs: Additional Sentinel arguments
+            """
+            
+            # Default Sentinel hosts for Kubernetes service
+            if sentinel_hosts is None:
+                sentinel_hosts = [
+                    ('redis-0.redis-headless.airflow.svc.cluster.local', 26379),
+                    ('redis-1.redis-headless.airflow.svc.cluster.local', 26379),
+                    ('redis-2.redis-headless.airflow.svc.cluster.local', 26379)
+                ]
+            
+            self.sentinel_hosts = sentinel_hosts
+            self.service_name = service_name
+            self.password = password
+            
+            # Default socket keepalive options
+            if socket_keepalive_options is None:
+                socket_keepalive_options = {
+                    1: 1,  # TCP_KEEPIDLE
+                    2: 3,  # TCP_KEEPINTVL
+                    3: 5,  # TCP_KEEPCNT
+                }
+            
+            # Connection pool configuration
+            pool_kwargs = {
+                'socket_timeout': socket_timeout,
+                'socket_connect_timeout': socket_connect_timeout,
+                'socket_keepalive': socket_keepalive,
+                'socket_keepalive_options': socket_keepalive_options,
+                'retry_on_timeout': True,
+                'health_check_interval': 30,
+                'max_connections': 50,
+            }
+            
+            if connection_pool_kwargs:
+                pool_kwargs.update(connection_pool_kwargs)
+            
+            # Sentinel configuration
+            sentinel_config = {
+                'socket_timeout': socket_timeout,
+                'socket_connect_timeout': socket_connect_timeout,
+                'password': password,
+            }
+            
+            if sentinel_kwargs:
+                sentinel_config.update(sentinel_kwargs)
+            
+            # Initialize Sentinel
+            self.sentinel = redis.sentinel.Sentinel(
+                sentinel_hosts,
+                sentinel_service_kwargs=pool_kwargs,
+                **sentinel_config
+            )
+            
+            self._master = None
+            self._slave = None
+            
+            logger.info(f"Initialized Redis connection pool with Sentinel hosts: {sentinel_hosts}")
+        
+        def get_master(self) -> redis.Redis:
+            """Get Redis master connection with automatic failover."""
+            try:
+                if self._master is None:
+                    self._master = self.sentinel.master_for(
+                        self.service_name,
+                        password=self.password,
+                        socket_timeout=0.5,
+                        socket_connect_timeout=0.5,
+                        retry_on_timeout=True
+                    )
+                
+                # Test connection
+                self._master.ping()
+                return self._master
+                
+            except (redis.ConnectionError, redis.TimeoutError, redis.RedisError) as e:
+                logger.warning(f"Master connection failed: {e}. Attempting failover...")
+                self._master = None
+                
+                # Retry with new master
+                try:
+                    self._master = self.sentinel.master_for(
+                        self.service_name,
+                        password=self.password,
+                        socket_timeout=0.5,
+                        socket_connect_timeout=0.5,
+                        retry_on_timeout=True
+                    )
+                    self._master.ping()
+                    logger.info("Successfully failed over to new master")
+                    return self._master
+                    
+                except Exception as retry_error:
+                    logger.error(f"Failover failed: {retry_error}")
+                    raise
+        
+        def get_slave(self) -> redis.Redis:
+            """Get Redis slave connection for read operations."""
+            try:
+                if self._slave is None:
+                    self._slave = self.sentinel.slave_for(
+                        self.service_name,
+                        password=self.password,
+                        socket_timeout=0.5,
+                        socket_connect_timeout=0.5,
+                        retry_on_timeout=True
+                    )
+                
+                # Test connection
+                self._slave.ping()
+                return self._slave
+                
+            except (redis.ConnectionError, redis.TimeoutError, redis.RedisError) as e:
+                logger.warning(f"Slave connection failed: {e}. Using master for reads...")
+                return self.get_master()
+        
+        @contextmanager
+        def get_connection(self, read_only: bool = False):
+            """Context manager for Redis connections."""
+            connection = None
+            try:
+                if read_only:
+                    connection = self.get_slave()
+                else:
+                    connection = self.get_master()
+                
+                yield connection
+                
+            except Exception as e:
+                logger.error(f"Redis operation failed: {e}")
+                raise
+            finally:
+                # Connection is returned to pool automatically
+                pass
+        
+        def health_check(self) -> Dict[str, Any]:
+            """Perform health check on Redis cluster."""
+            health_status = {
+                'master_available': False,
+                'slave_available': False,
+                'sentinel_nodes': [],
+                'master_info': None,
+                'error': None
+            }
+            
+            try:
+                # Check Sentinel nodes
+                for host, port in self.sentinel_hosts:
+                    try:
+                        sentinel_conn = redis.Redis(host=host, port=port, 
+                                                  socket_timeout=1.0,
+                                                  password=self.password)
+                        sentinel_conn.ping()
+                        health_status['sentinel_nodes'].append({
+                            'host': host,
+                            'port': port,
+                            'status': 'healthy'
+                        })
+                    except Exception as e:
+                        health_status['sentinel_nodes'].append({
+                            'host': host,
+                            'port': port,
+                            'status': 'unhealthy',
+                            'error': str(e)
+                        })
+                
+                # Check master
+                try:
+                    master = self.get_master()
+                    master.ping()
+                    health_status['master_available'] = True
+                    health_status['master_info'] = master.info('replication')
+                except Exception as e:
+                    health_status['error'] = f"Master check failed: {e}"
+                
+                # Check slave
+                try:
+                    slave = self.get_slave()
+                    slave.ping()
+                    health_status['slave_available'] = True
+                except Exception as e:
+                    logger.debug(f"Slave check failed: {e}")
+                
+            except Exception as e:
+                health_status['error'] = f"Health check failed: {e}"
+            
+            return health_status
+        
+        def reset_connections(self):
+            """Reset all connections to force reconnection."""
+            self._master = None
+            self._slave = None
+            logger.info("Reset all Redis connections")
+    
+    # Global connection pool instance
+    redis_pool = None
+    
+    def get_redis_pool() -> RedisConnectionPool:
+        """Get global Redis connection pool instance."""
+        global redis_pool
+        if redis_pool is None:
+            import os
+            password = os.getenv('REDIS_PASSWORD', 'airflow-redis-2024')
+            redis_pool = RedisConnectionPool(password=password)
+        return redis_pool
+    
+    def test_connection_pool():
+        """Test Redis connection pool functionality."""
+        pool = get_redis_pool()
+        
+        # Test master connection
+        try:
+            with pool.get_connection() as conn:
+                conn.set('test_key', 'test_value')
+                value = conn.get('test_key')
+                assert value.decode() == 'test_value'
+                conn.delete('test_key')
+            print("✓ Master connection test passed")
+        except Exception as e:
+            print(f"✗ Master connection test failed: {e}")
+        
+        # Test slave connection
+        try:
+            with pool.get_connection(read_only=True) as conn:
+                conn.ping()
+            print("✓ Slave connection test passed")
+        except Exception as e:
+            print(f"✗ Slave connection test failed: {e}")
+        
+        # Test health check
+        try:
+            health = pool.health_check()
+            print(f"✓ Health check completed: {health}")
+        except Exception as e:
+            print(f"✗ Health check failed: {e}")
+    
+    if __name__ == '__main__':
+        test_connection_pool()
+  
+  airflow-redis-config.py: |
+    #!/usr/bin/env python3
+    """
+    Airflow Redis Configuration for Celery Executor
+    
+    This configuration integrates the Redis connection pool
+    with Airflow's Celery executor for task queuing.
+    """
+    
+    import os
+    from redis_connection_pool import get_redis_pool
+    
+    # Redis connection configuration for Airflow
+    REDIS_HOST = os.getenv('REDIS_HOST', 'redis.airflow.svc.cluster.local')
+    REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+    REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', 'airflow-redis-2024')
+    REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+    
+    # Sentinel configuration
+    REDIS_SENTINEL_HOSTS = [
+        ('redis-0.redis-headless.airflow.svc.cluster.local', 26379),
+        ('redis-1.redis-headless.airflow.svc.cluster.local', 26379),
+        ('redis-2.redis-headless.airflow.svc.cluster.local', 26379)
+    ]
+    REDIS_SENTINEL_SERVICE = 'mymaster'
+    
+    # Celery broker URL with Sentinel support
+    CELERY_BROKER_URL = f"sentinel://:{REDIS_PASSWORD}@{';'.join([f'{host}:{port}' for host, port in REDIS_SENTINEL_HOSTS])}/{REDIS_DB}"
+    CELERY_BROKER_URL += f"?sentinel_service_name={REDIS_SENTINEL_SERVICE}"
+    
+    # Celery result backend
+    CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+    
+    # Connection pool settings
+    CELERY_BROKER_POOL_LIMIT = 50
+    CELERY_BROKER_CONNECTION_RETRY = True
+    CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+    CELERY_BROKER_CONNECTION_MAX_RETRIES = 10
+    
+    # Task routing and execution
+    CELERY_DEFAULT_QUEUE = 'airflow'
+    CELERY_DEFAULT_EXCHANGE = 'airflow'
+    CELERY_DEFAULT_ROUTING_KEY = 'airflow'
+    
+    # Monitoring and health checks
+    CELERY_SEND_EVENTS = True
+    CELERY_TASK_SEND_SENT_EVENT = True
+    
+    def get_airflow_redis_config():
+        """Get Redis configuration for Airflow."""
+        return {
+            'broker_url': CELERY_BROKER_URL,
+            'result_backend': CELERY_RESULT_BACKEND,
+            'broker_pool_limit': CELERY_BROKER_POOL_LIMIT,
+            'broker_connection_retry': CELERY_BROKER_CONNECTION_RETRY,
+            'broker_connection_retry_on_startup': CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP,
+            'broker_connection_max_retries': CELERY_BROKER_CONNECTION_MAX_RETRIES,
+            'task_default_queue': CELERY_DEFAULT_QUEUE,
+            'task_default_exchange': CELERY_DEFAULT_EXCHANGE,
+            'task_default_routing_key': CELERY_DEFAULT_ROUTING_KEY,
+            'worker_send_task_events': CELERY_SEND_EVENTS,
+            'task_send_sent_event': CELERY_TASK_SEND_SENT_EVENT,
+        }

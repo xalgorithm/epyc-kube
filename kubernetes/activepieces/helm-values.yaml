@@ -1,0 +1,105 @@
+# Activepieces Helm Chart Values
+# Domain: automate2.gray-beard.com
+# Namespace: automation
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/activepieces/activepieces
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.entrypoints: "web,websecure"
+    traefik.ingress.kubernetes.io/router.middlewares: "default-redirect-https@kubernetescrd"
+  hosts:
+    - host: automate2.gray-beard.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: activepieces-tls
+      hosts:
+        - automate2.gray-beard.com
+
+# Resource limits
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+# Activepieces Configuration
+config:
+  # URLs
+  frontendUrl: "https://automate2.gray-beard.com"
+  apiUrl: "https://automate2.gray-beard.com"
+  webhookUrl: "https://automate2.gray-beard.com"
+  
+  # Environment
+  environment: "prod"
+  
+  # Features
+  signUpEnabled: true
+  telemetryEnabled: false
+  
+  # Execution
+  executionMode: "UNSANDBOXED"
+  
+  # Queue
+  queueMode: "REDIS"
+  
+  # Logging
+  logLevel: "info"
+  logPretty: false
+  
+  # Trigger settings
+  triggerDefaultPollInterval: 5
+  
+  # Templates
+  templatesSourceUrl: "https://cloud.activepieces.com/api/v1/flow-templates"
+
+# PostgreSQL Configuration
+postgresql:
+  enabled: true
+  image:
+    tag: "16"  # Use latest stable v16
+  auth:
+    database: "activepieces"
+    username: "activepieces"
+    # Password will be auto-generated
+    password: ""
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "nfs-client"
+
+# Redis Configuration
+redis:
+  enabled: true
+  image:
+    tag: "7.4"  # Use latest stable v7.4
+  auth:
+    enabled: false  # Disable auth for simplicity
+    password: ""
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: "nfs-client"
+  replica:
+    replicaCount: 0  # Disable replicas for simplicity
+

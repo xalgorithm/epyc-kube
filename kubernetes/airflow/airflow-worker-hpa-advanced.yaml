@@ -1,0 +1,174 @@
+# Advanced Airflow Worker Horizontal Pod Autoscaler with Custom Metrics
+# This configuration implements requirements 5.1, 5.2, 5.3, 5.5, 5.6
+# Provides automatic scaling based on CPU, memory, and custom queue depth metrics
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: airflow-worker-hpa-advanced
+  namespace: airflow
+  labels:
+    app: airflow
+    component: worker
+    tier: airflow
+  annotations:
+    # Documentation for operators
+    description: "Advanced HPA for Airflow workers with custom queue depth metrics"
+    requirements: "5.1, 5.2, 5.3, 5.5, 5.6"
+spec:
+  # Target the Airflow worker deployment
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: airflow-worker
+  
+  # Scaling configuration (Requirements 5.1, 5.4)
+  minReplicas: 2    # Minimum replicas for availability (Requirement 5.4)
+  maxReplicas: 10   # Maximum replicas to prevent resource exhaustion (Requirement 5.4)
+  
+  # Multi-metric scaling configuration (Requirements 5.2, 5.3, 5.5, 5.6)
+  metrics:
+    # Primary metric: CPU utilization (Requirement 5.2)
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    
+    # Secondary metric: Memory utilization (Requirement 5.3)
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+    
+    # Custom metric: Queue depth (Requirements 5.5, 5.6)
+    # This will be used if prometheus-adapter is available
+    - type: Object
+      object:
+        metric:
+          name: airflow_queue_depth
+        target:
+          type: Value
+          value: "20"  # Scale up when queue depth > 20 tasks
+        describedObject:
+          apiVersion: v1
+          kind: Service
+          name: redis
+    
+    # Custom metric: Worker utilization (Requirements 5.5, 5.6)
+    - type: Object
+      object:
+        metric:
+          name: airflow_worker_utilization
+        target:
+          type: Value
+          value: "85"  # Scale up when worker utilization > 85%
+        describedObject:
+          apiVersion: v1
+          kind: Service
+          name: airflow-worker
+  
+  # Advanced scaling behavior configuration (Requirements 5.5, 5.6)
+  behavior:
+    scaleUp:
+      # Aggressive scale-up for handling traffic spikes
+      stabilizationWindowSeconds: 60  # Wait 1 minute before scaling up again
+      policies:
+        # Allow doubling of pods for severe load
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        # Or add up to 3 pods at once for moderate load
+        - type: Pods
+          value: 3
+          periodSeconds: 60
+        # Quick response for queue buildup
+        - type: Pods
+          value: 1
+          periodSeconds: 30
+      selectPolicy: Max   # Use the most aggressive policy
+    
+    scaleDown:
+      # Conservative scale-down to avoid thrashing
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+        # Remove at most 50% of pods
+        - type: Percent
+          value: 50
+          periodSeconds: 300
+        # Or remove 1 pod at a time for gradual reduction
+        - type: Pods
+          value: 1
+          periodSeconds: 180
+      selectPolicy: Min   # Use the most conservative policy
+
+---
+# Fallback HPA without custom metrics (for environments without prometheus-adapter)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: airflow-worker-hpa-fallback
+  namespace: airflow
+  labels:
+    app: airflow
+    component: worker
+    tier: airflow
+    fallback: "true"
+  annotations:
+    description: "Fallback HPA for Airflow workers using only resource metrics"
+    requirements: "5.1, 5.2, 5.3"
+spec:
+  # Target the Airflow worker deployment
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: airflow-worker
+  
+  # Scaling configuration
+  minReplicas: 2
+  maxReplicas: 10
+  
+  # Resource-based metrics only
+  metrics:
+    # CPU utilization - more aggressive threshold without queue metrics
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60  # Lower threshold to compensate for lack of queue metrics
+    
+    # Memory utilization
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75  # Lower threshold for proactive scaling
+  
+  # Scaling behavior - more aggressive without custom metrics
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 45
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 45
+      selectPolicy: Max
+    
+    scaleDown:
+      stabilizationWindowSeconds: 240
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 240
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+      selectPolicy: Min

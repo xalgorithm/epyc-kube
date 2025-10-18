@@ -1,0 +1,107 @@
+# Airflow Queue Depth Metrics Configuration
+# This configuration implements custom metrics for task queue depth monitoring
+# Requirements: 5.5, 5.6 - Custom metrics for task queue depth monitoring
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: airflow-queue-metrics
+  namespace: airflow
+  labels:
+    app: airflow
+    component: metrics
+    tier: airflow
+    prometheus: kube-prometheus-stack-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: airflow.queue.metrics
+      interval: 30s
+      rules:
+        # Calculate average queue depth over 5 minutes
+        - record: airflow:queue_depth:avg5m
+          expr: |
+            avg_over_time(
+              (
+                airflow_celery_queue_length{queue="default"} or
+                airflow_executor_queued_tasks{executor="CeleryExecutor"} or
+                redis_list_length{list="celery"}
+              )[5m:]
+            )
+        
+        # Calculate queue depth rate of change
+        - record: airflow:queue_depth:rate5m
+          expr: |
+            rate(
+              (
+                airflow_celery_queue_length{queue="default"} or
+                airflow_executor_queued_tasks{executor="CeleryExecutor"} or
+                redis_list_length{list="celery"}
+              )[5m:]
+            )
+        
+        # Calculate worker utilization percentage
+        - record: airflow:worker_utilization:avg5m
+          expr: |
+            (
+              sum(airflow_celery_active_tasks) /
+              sum(airflow_celery_worker_count)
+            ) * 100
+        
+        # Calculate task success rate
+        - record: airflow:task_success_rate:5m
+          expr: |
+            (
+              rate(airflow_task_instance_finished_total{state="success"}[5m]) /
+              rate(airflow_task_instance_finished_total[5m])
+            ) * 100
+        
+        # Calculate average task duration
+        - record: airflow:task_duration:avg5m
+          expr: |
+            avg_over_time(airflow_task_duration_seconds[5m])
+
+---
+# Custom Metrics for HPA (if prometheus-adapter is available)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-custom-metrics-config
+  namespace: airflow
+  labels:
+    app: airflow
+    component: metrics
+    tier: airflow
+data:
+  # Configuration for custom metrics API adapter
+  config.yaml: |
+    rules:
+      # Queue depth metric for HPA scaling
+      - seriesQuery: 'airflow:queue_depth:avg5m'
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+        name:
+          matches: "^airflow:queue_depth:avg5m"
+          as: "airflow_queue_depth"
+        metricsQuery: 'avg(<<.Series>>{<<.LabelMatchers>>})'
+      
+      # Worker utilization metric for HPA scaling
+      - seriesQuery: 'airflow:worker_utilization:avg5m'
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+        name:
+          matches: "^airflow:worker_utilization:avg5m"
+          as: "airflow_worker_utilization"
+        metricsQuery: 'avg(<<.Series>>{<<.LabelMatchers>>})'
+      
+      # Task success rate metric for monitoring
+      - seriesQuery: 'airflow:task_success_rate:5m'
+        resources:
+          overrides:
+            namespace: {resource: "namespace"}
+        name:
+          matches: "^airflow:task_success_rate:5m"
+          as: "airflow_task_success_rate"
+        metricsQuery: 'avg(<<.Series>>{<<.LabelMatchers>>})'

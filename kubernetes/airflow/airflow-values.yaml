@@ -1,0 +1,221 @@
+# Airflow Helm Chart Values - High Availability Configuration
+# This configuration implements requirements 1.1, 1.2, 1.3, 1.4, 5.4
+# Updated for Airflow Helm Chart v1.18.0
+
+# Global Airflow configuration
+# Use CeleryKubernetesExecutor for hybrid execution (Requirement 5.4)
+executor: CeleryKubernetesExecutor
+
+# Airflow configuration - Using Vault-managed secrets
+config:
+  core:
+    dags_are_paused_at_creation: "True"
+    load_examples: "False"
+    max_active_runs_per_dag: 16
+    max_active_tasks_per_dag: 16
+  scheduler:
+    dag_dir_list_interval: 300
+    catchup_by_default: "False"
+  webserver:
+    rbac: "True"
+    authenticate: "True"
+  metrics:
+    statsd_on: "True"
+    statsd_host: "airflow-statsd-exporter"
+    statsd_port: 9125
+    statsd_prefix: "airflow"
+  kubernetes_executor:
+    namespace: "airflow"
+    worker_container_repository: "apache/airflow"
+    worker_container_tag: "3.0.2"
+    delete_worker_pods: "True"
+
+# Webserver configuration - High Availability (Requirements 1.1, 1.3)
+webserver:
+  # Multiple replicas for high availability
+  replicas: 2
+  
+  # Resource configuration (Design: 2 CPU cores, 4Gi memory per pod)
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  
+  # Health checks for reliability (Requirement 1.3)
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 5
+    scheme: HTTP
+  
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    scheme: HTTP
+
+# Scheduler configuration - High Availability (Requirements 1.2, 1.4)
+scheduler:
+  # Multiple replicas with leader election for HA
+  replicas: 2
+  
+  # Resource configuration (Design: 2 CPU cores, 4Gi memory per pod)
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  
+  # Health checks for reliability (Requirement 1.4)
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 20
+    failureThreshold: 5
+
+# Worker configuration for CeleryExecutor (Requirement 5.4)
+workers:
+  # Initial replica count (will be managed by HPA in task 8)
+  replicas: 2
+  
+  # Resource configuration (Design: 1 CPU core, 2Gi memory per pod)
+  # Resources must be specified for HPA to work properly
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  
+  # Health checks for HPA scaling decisions
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 5
+
+# Flower (Celery monitoring) configuration
+flower:
+  enabled: true
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Database configuration - Use existing PostgreSQL
+postgresql:
+  # Disable built-in PostgreSQL (we use external)
+  enabled: false
+
+# Redis configuration - Use existing Redis
+redis:
+  # Disable built-in Redis (we use external)
+  enabled: false
+
+# External database configuration - Using Vault secrets
+data:
+  # Use existing PostgreSQL primary service with Vault-managed credentials
+  metadataSecretName: airflow-database-secret
+  resultBackendSecretName: airflow-database-secret
+  brokerUrlSecretName: airflow-redis-secret
+
+# Persistent volumes configuration
+dags:
+  persistence:
+    # Use existing DAGs PVC from task 3
+    enabled: true
+    existingClaim: airflow-dags-pvc
+
+logs:
+  persistence:
+    # Use existing logs PVC from task 3
+    enabled: true
+    existingClaim: airflow-logs-pvc
+
+# Service account configuration (from task 4)
+serviceAccount:
+  create: false
+  name: airflow-scheduler
+
+# Security context configuration
+securityContexts:
+  pod:
+    runAsNonRoot: true
+    runAsUser: 50000
+    runAsGroup: 0
+    fsGroup: 0
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    runAsNonRoot: true
+    runAsUser: 50000
+    runAsGroup: 0
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+
+# Ingress configuration (will be configured in task 7)
+ingress:
+  web:
+    enabled: false
+
+# StatsD configuration for monitoring (Task 10 - Requirements 3.1, 3.7)
+statsd:
+  enabled: true
+  # Security context for statsd container
+  securityContexts:
+    pod:
+      runAsNonRoot: true
+      runAsUser: 65534
+      runAsGroup: 65534
+      fsGroup: 65534
+      seccompProfile:
+        type: RuntimeDefault
+    container:
+      runAsNonRoot: true
+      runAsUser: 65534
+      runAsGroup: 65534
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+
+# Environment variables from Vault-managed secrets
+extraEnvFrom: |
+  - secretRef:
+      name: airflow-database-secret
+  - secretRef:
+      name: airflow-redis-secret
+  - secretRef:
+      name: airflow-webserver-secret
+  - secretRef:
+      name: airflow-connections-secret
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod disruption budget for high availability
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1

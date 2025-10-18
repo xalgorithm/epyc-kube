@@ -1,0 +1,247 @@
+# Airflow StatsD Exporter Configuration
+# This configuration enables StatsD metrics collection for Airflow components
+# Requirements: 3.1, 3.7 - Expose Airflow metrics to Prometheus
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-statsd-exporter
+  namespace: airflow
+  labels:
+    app: airflow
+    component: statsd-exporter
+    tier: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+      component: statsd-exporter
+  template:
+    metadata:
+      labels:
+        app: airflow
+        component: statsd-exporter
+        tier: monitoring
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: statsd-exporter
+        image: prom/statsd-exporter:v0.24.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        ports:
+        - name: metrics
+          containerPort: 9102
+          protocol: TCP
+        - name: statsd
+          containerPort: 9125
+          protocol: UDP
+        args:
+        - --web.listen-address=0.0.0.0:9102
+        - --statsd.listen-udp=0.0.0.0:9125
+        - --statsd.mapping-config=/etc/statsd-mapping/statsd-mapping.yml
+        - --log.level=info
+        volumeMounts:
+        - name: statsd-mapping
+          mountPath: /etc/statsd-mapping
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 9102
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 9102
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: statsd-mapping
+        configMap:
+          name: airflow-statsd-mapping
+      - name: tmp
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-statsd-exporter
+  namespace: airflow
+  labels:
+    app: airflow
+    component: statsd-exporter
+    tier: monitoring
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 9102
+    targetPort: 9102
+    protocol: TCP
+  - name: statsd
+    port: 9125
+    targetPort: 9125
+    protocol: UDP
+  selector:
+    app: airflow
+    component: statsd-exporter
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-statsd-mapping
+  namespace: airflow
+  labels:
+    app: airflow
+    component: statsd-exporter
+    tier: monitoring
+data:
+  statsd-mapping.yml: |
+    # Airflow StatsD Mapping Configuration
+    # Maps Airflow StatsD metrics to Prometheus format
+    
+    mappings:
+    # DAG and Task metrics
+    - match: "airflow.dag.*.*.duration"
+      name: "airflow_dag_task_duration_seconds"
+      labels:
+        dag_id: "$1"
+        task_id: "$2"
+    
+    - match: "airflow.dag.*.*.*.duration"
+      name: "airflow_dag_task_instance_duration_seconds"
+      labels:
+        dag_id: "$1"
+        task_id: "$2"
+        run_id: "$3"
+    
+    - match: "airflow.dag_processing.last_duration.*"
+      name: "airflow_dag_processing_duration_seconds"
+      labels:
+        dag_file: "$1"
+    
+    - match: "airflow.dag_processing.last_run.seconds_ago.*"
+      name: "airflow_dag_processing_last_run_seconds_ago"
+      labels:
+        dag_file: "$1"
+    
+    # Scheduler metrics
+    - match: "airflow.scheduler.tasks.killed_externally"
+      name: "airflow_scheduler_tasks_killed_externally_total"
+    
+    - match: "airflow.scheduler.tasks.running"
+      name: "airflow_scheduler_tasks_running"
+    
+    - match: "airflow.scheduler.tasks.starving"
+      name: "airflow_scheduler_tasks_starving"
+    
+    - match: "airflow.scheduler.orphaned_tasks.cleared"
+      name: "airflow_scheduler_orphaned_tasks_cleared_total"
+    
+    - match: "airflow.scheduler.orphaned_tasks.adopted"
+      name: "airflow_scheduler_orphaned_tasks_adopted_total"
+    
+    - match: "airflow.scheduler.critical_section_duration"
+      name: "airflow_scheduler_critical_section_duration_seconds"
+    
+    # Executor metrics
+    - match: "airflow.executor.open_slots"
+      name: "airflow_executor_open_slots"
+    
+    - match: "airflow.executor.queued_tasks"
+      name: "airflow_executor_queued_tasks"
+    
+    - match: "airflow.executor.running_tasks"
+      name: "airflow_executor_running_tasks"
+    
+    # Pool metrics
+    - match: "airflow.pool.open_slots.*"
+      name: "airflow_pool_open_slots"
+      labels:
+        pool: "$1"
+    
+    - match: "airflow.pool.queued_slots.*"
+      name: "airflow_pool_queued_slots"
+      labels:
+        pool: "$1"
+    
+    - match: "airflow.pool.running_slots.*"
+      name: "airflow_pool_running_slots"
+      labels:
+        pool: "$1"
+    
+    # Task instance metrics
+    - match: "airflow.task_instance_created-*"
+      name: "airflow_task_instance_created_total"
+      labels:
+        dag_id: "$1"
+    
+    - match: "airflow.task_instance_finished-*.*"
+      name: "airflow_task_instance_finished_total"
+      labels:
+        dag_id: "$1"
+        state: "$2"
+    
+    # Database metrics
+    - match: "airflow.dag_processing.processes"
+      name: "airflow_dag_processing_processes"
+    
+    - match: "airflow.dagbag_size"
+      name: "airflow_dagbag_size"
+    
+    # Celery metrics (for CeleryExecutor)
+    - match: "airflow.celery.task_timeout_error"
+      name: "airflow_celery_task_timeout_error_total"
+    
+    - match: "airflow.celery.execute_command.duration"
+      name: "airflow_celery_execute_command_duration_seconds"
+    
+    # Smart sensor metrics
+    - match: "airflow.smart_sensor_operator.poked_tasks"
+      name: "airflow_smart_sensor_poked_tasks_total"
+    
+    - match: "airflow.smart_sensor_operator.poked_success"
+      name: "airflow_smart_sensor_poked_success_total"
+    
+    - match: "airflow.smart_sensor_operator.poked_exception"
+      name: "airflow_smart_sensor_poked_exception_total"
+    
+    # Generic counter and timer patterns
+    - match: "airflow.*.*"
+      match_type: regex
+      name: "airflow_${1}_${2}"
+    
+    - match: "airflow.*"
+      match_type: regex
+      name: "airflow_${1}"

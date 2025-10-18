@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wordpress-exporter
-  namespace: wordpress
+  namespace: kampfzwerg
   labels:
     app: wordpress-exporter
 spec:
@@ -47,7 +47,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: wordpress-apache-config
-  namespace: wordpress
+  namespace: kampfzwerg
 data:
   apache-status.conf: |
     <Location "/server-status">
@@ -67,7 +67,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: wordpress-exporter
-  namespace: wordpress
+  namespace: kampfzwerg
   labels:
     app: wordpress-exporter
 spec:
@@ -82,7 +82,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: wordpress-exporter
-  namespace: wordpress
+  namespace: kampfzwerg
   labels:
     app: wordpress-exporter
     release: kube-prometheus-stack

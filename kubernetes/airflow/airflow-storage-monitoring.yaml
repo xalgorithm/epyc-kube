@@ -1,0 +1,137 @@
+# Airflow Storage Monitoring Configuration
+# This file creates monitoring resources for Airflow storage capacity and performance
+# Requirements: 2.6
+
+---
+# ServiceMonitor for storage metrics collection
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-storage-monitor
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: storage-monitoring
+    app.kubernetes.io/part-of: airflow
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow-storage-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# Deployment for storage metrics exporter
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-storage-exporter
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow-storage-exporter
+    app.kubernetes.io/component: storage-monitoring
+    app.kubernetes.io/part-of: airflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow-storage-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow-storage-exporter
+        app.kubernetes.io/component: storage-monitoring
+    spec:
+      serviceAccountName: airflow-storage-monitor
+      containers:
+      - name: storage-exporter
+        image: prom/node-exporter:v1.6.1
+        args:
+          - '--path.procfs=/host/proc'
+          - '--path.sysfs=/host/sys'
+          - '--path.rootfs=/host/root'
+          - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+          - '--web.listen-address=0.0.0.0:9100'
+        ports:
+        - name: metrics
+          containerPort: 9100
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 200m
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        volumeMounts:
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        - name: root
+          mountPath: /host/root
+          readOnly: true
+        - name: dags-volume
+          mountPath: /airflow/dags
+          readOnly: true
+        - name: logs-volume
+          mountPath: /airflow/logs
+          readOnly: true
+        - name: config-volume
+          mountPath: /airflow/config
+          readOnly: true
+      volumes:
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: root
+        hostPath:
+          path: /
+      - name: dags-volume
+        persistentVolumeClaim:
+          claimName: airflow-dags-pvc
+      - name: logs-volume
+        persistentVolumeClaim:
+          claimName: airflow-logs-pvc
+      - name: config-volume
+        persistentVolumeClaim:
+          claimName: airflow-config-pvc
+      hostNetwork: false
+      hostPID: false
+
+---
+# Service for storage exporter
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-storage-exporter
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow-storage-exporter
+    app.kubernetes.io/component: storage-monitoring
+spec:
+  selector:
+    app.kubernetes.io/name: airflow-storage-exporter
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: 9100
+    protocol: TCP
+
+---
+# ServiceAccount for storage monitoring
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: airflow-storage-monitor
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: storage-monitoring

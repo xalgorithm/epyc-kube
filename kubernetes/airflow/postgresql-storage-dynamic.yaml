@@ -1,0 +1,37 @@
+# PostgreSQL Storage Configuration - Auto-generated
+# Uses detected storage class: nfs-client
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-primary-pvc
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: primary
+    storage-class: nfs-client
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-standby-pvc
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: standby
+    storage-class: nfs-client
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 100Gi

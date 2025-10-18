@@ -11,3 +11,7 @@
 kubeconfig
 .kube/
 tmp/ 
+.cred-stuff/
+.cursorrules
+.kiro/
+config/

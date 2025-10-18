@@ -1,0 +1,27 @@
+# Airflow TLS Certificate Resource
+# Explicit certificate management for Airflow webserver (Requirement 4.2, 7.1)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: airflow-tls-certificate
+  namespace: airflow
+spec:
+  # Certificate details
+  secretName: airflow-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  # Domain names covered by this certificate
+  dnsNames:
+  - airflow.gray-beard.com
+  # Certificate renewal settings
+  renewBefore: 720h # 30 days
+  # Key algorithm and size
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  # Certificate usage
+  usages:
+  - digital signature
+  - key encipherment
+  - server auth

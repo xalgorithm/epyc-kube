@@ -1,382 +1,237 @@
-# WordPress Kubernetes Deployment
+# WordPress on Kubernetes (ethosenv)
 
-This directory contains the Kubernetes manifests and scripts to deploy the WordPress application from the `ethosenv` Docker Compose setup to a Kubernetes cluster.
+This directory contains the Kubernetes manifests and scripts to deploy WordPress in the `ethosenv` namespace with comprehensive migration and fix capabilities.
 
-## Overview
+## 🚀 Quick Start
 
-The deployment includes:
-- **MySQL 8.0** database with persistent storage
-- **WordPress** application with persistent storage
-- **SSL Certificate** automatically managed by cert-manager and Let's Encrypt
-- **Ingress** configuration with SSL termination for ethos.gray-beard.com
-- **Secrets** management for sensitive data
-- **Migration scripts** to transfer existing content and database
+### **Option 1: Complete Deployment (Recommended)**
 
-## Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐
-│   Ingress       │    │   WordPress     │
-│   (External)    │───▶│   Deployment    │
-└─────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌─────────────────┐
-                       │   MySQL         │
-                       │   Deployment    │
-                       └─────────────────┘
-                                │
-                                ▼
-                       ┌─────────────────┐
-                       │   Persistent    │
-                       │   Storage       │
-                       └─────────────────┘
+```bash
+./run-script.sh master-deploy-wordpress
 ```
 
-## Files Structure
+This single command will:
+
+- Deploy all Kubernetes resources
+- Install WP-CLI
+- Migrate content from `../ethosenv/wordpress`
+- Fix all URL issues
+- Configure SSL and ingress
+
+### **Option 2: Step-by-Step Deployment**
+
+```bash
+# 1. Deploy basic WordPress
+./run-script.sh deploy-wordpress
+
+# 2. Install WP-CLI
+./run-script.sh install-wpcli-existing
+
+# 3. Migrate content
+./run-script.sh migrate-wordpress-content-alt
+
+# 4. Fix URLs
+./run-script.sh fix-wordpress-urls
+
+# 5. Fix ingress issues
+./run-script.sh fix-ingress-issues
+```
+
+## 📁 Directory Structure
 
 ```
 kubernetes/ethosenv-k8s/
-├── 01-namespace.yaml              # Namespace definition
-├── 02-secrets.yaml                # WordPress and MySQL secrets
-├── 03-storage.yaml                # Persistent Volume Claims
-├── 04-mysql-deployment.yaml       # MySQL database deployment
-├── 05-wordpress-deployment.yaml   # WordPress application deployment
-├── 06-ingress.yaml                # Ingress configuration with SSL
-├── 07-cert-manager-issuer.yaml    # cert-manager ClusterIssuer for Let's Encrypt
-├── 08-ssl-certificate.yaml        # SSL Certificate for ethos.gray-beard.com
-├── deploy-wordpress.sh            # Main deployment script
-├── install-cert-manager.sh        # cert-manager installation script
-├── check-ssl-status.sh            # SSL certificate status checker
-├── migrate-wordpress-content.sh   # Content migration script
-├── migrate-database.sh            # Database migration script
-├── monitor-wordpress.sh           # Monitoring script
-└── README.md                      # This file
+├── scripts/                    # All shell scripts
+│   ├── master-deploy-wordpress.sh    # Complete deployment
+│   ├── deploy-wordpress.sh           # Basic deployment
+│   ├── migrate-*.sh                  # Content migration scripts
+│   ├── fix-*.sh                      # Fix and repair scripts
+│   ├── check-*.sh                    # Diagnostic scripts
+│   └── ...
+├── wordpress-with-wpcli/       # Custom Docker image files
+├── *.yaml                      # Kubernetes manifests
+├── run-script.sh              # Script launcher
+└── README.md                  # This file
 ```
 
-## Prerequisites
+## 📋 Available Scripts
 
-1. **Kubernetes Cluster**: Running Kubernetes cluster with kubectl access
-2. **Storage Class**: Available storage class (defaults to `nfs-client`)
-3. **Ingress Controller**: Nginx ingress controller (or modify ingress.yaml)
-4. **DNS Configuration**: ethos.gray-beard.com should point to your ingress controller IP
-5. **cert-manager** (optional): Will be installed automatically if not present
-6. **Docker** (optional): For database backup from existing setup
+### **🚀 Deployment Scripts**
 
-## Quick Start
+- `master-deploy-wordpress` - **Complete deployment with all fixes**
+- `deploy-wordpress` - Basic WordPress deployment
+- `quick-start` - Quick deployment guide
 
-### 1. Deploy WordPress to Kubernetes
+### **🔧 Setup & Configuration**
+
+- `install-cert-manager` - Install cert-manager for SSL
+- `configure-dns` - DNS configuration guide
+- `install-wpcli-existing` - Install WP-CLI in existing container
+- `redeploy-wordpress-with-wpcli` - Redeploy with WP-CLI
+
+### **📁 Content Migration**
+
+- `migrate-wordpress-content` - Migrate WordPress files (tar method)
+- `migrate-wordpress-content-alt` - **Alternative migration (no tar, recommended)**
+- `migrate-wordpress-simple` - Simple migration method
+- `migrate-database` - Database migration
+
+### **🔗 URL & Connectivity Fixes**
+
+- `fix-wordpress-urls` - **Fix WordPress URLs (remove :8080, set HTTPS)**
+- `fix-ingress-issues` - **Fix ingress connectivity issues**
+- `update-wordpress-urls` - Basic URL updates
+- `update-wordpress-urls-advanced` - Advanced URL updates with WP-CLI
+- `update-wordpress-urls-simple` - Simple URL updates
+
+### **🔍 Diagnostics & Monitoring**
+
+- `diagnose-wordpress` - **Comprehensive WordPress diagnostics**
+- `check-ingress-status` - Check ingress and service status
+- `check-wordpress-urls` - Check current WordPress URLs
+- `check-ssl-status` - Check SSL certificate status
+- `verify-deployment` - Verify deployment status
+- `monitor-wordpress` - Monitor WordPress deployment
+
+## 🎯 Common Use Cases
+
+### **Deploy from Scratch:**
 
 ```bash
-# Deploy all components
-./deploy-wordpress.sh
+./run-script.sh master-deploy-wordpress
 ```
 
-### 2. Migrate Existing Content
+### **Fix "No Available Server" Error:**
 
 ```bash
-# Migrate WordPress files
-./migrate-wordpress-content.sh
-
-# Migrate database (full migration)
-./migrate-database.sh full-migration
+./run-script.sh fix-ingress-issues
 ```
 
-### 3. Access WordPress
+### **Fix URLs with :8080 Port:**
 
 ```bash
-# Port forward for local access
-kubectl port-forward svc/wordpress 8080:80 -n ethosenv
-
-# Production access (requires DNS configuration)
-# Ensure ethos.gray-beard.com points to your ingress IP
-# Then visit: https://ethos.gray-beard.com
+./run-script.sh fix-wordpress-urls
 ```
 
-## Detailed Deployment Steps
-
-### Step 1: Review Configuration
-
-Before deployment, review and customize:
-
-1. **Secrets** (`02-secrets.yaml`):
-   - Update database passwords
-   - Generate new WordPress security keys
-   - Use proper secret management in production
-
-2. **Storage** (`03-storage.yaml`):
-   - Adjust storage class if needed
-   - Modify storage sizes based on requirements
-
-3. **Ingress** (`06-ingress.yaml`):
-   - Update hostname
-   - Configure SSL/TLS certificates
-   - Adjust ingress controller annotations
-
-### Step 2: Deploy Infrastructure
+### **Diagnose Issues:**
 
 ```bash
-# Create namespace
-kubectl apply -f 01-namespace.yaml
-
-# Create secrets
-kubectl apply -f 02-secrets.yaml
-
-# Create storage
-kubectl apply -f 03-storage.yaml
-
-# Wait for PVCs to be bound
-kubectl get pvc -n ethosenv -w
+./run-script.sh diagnose-wordpress
 ```
 
-### Step 3: Deploy Database
+### **Migrate Content Only:**
 
 ```bash
-# Deploy MySQL
-kubectl apply -f 04-mysql-deployment.yaml
-
-# Wait for MySQL to be ready
-kubectl wait --for=condition=available --timeout=300s deployment/mysql -n ethosenv
+./run-script.sh migrate-wordpress-content-alt
 ```
 
-### Step 4: Deploy WordPress
+## 📦 Kubernetes Manifests
+
+- `01-namespace.yaml` - Creates the ethosenv namespace
+- `02-secrets.yaml` - WordPress and MySQL secrets
+- `03-storage.yaml` - Persistent volume claims
+- `04-mysql-deployment.yaml` - MySQL database deployment
+- `05-wordpress-deployment.yaml` - WordPress application deployment
+- `06-ingress.yaml` - Ingress configuration with SSL
+- `07-cert-manager-issuer.yaml` - Let's Encrypt certificate issuer
+- `08-ssl-certificate.yaml` - SSL certificate configuration
+
+## ⚙️ Configuration
+
+### **Target URL**
+
+- Production URL: `https://ethos.gray-beard.com`
+- WordPress Admin: `https://ethos.gray-beard.com/wp-admin`
+
+### **Source Content**
+
+- Expected location: `../ethosenv/wordpress/`
+- Contains: themes, plugins, uploads, .htaccess, etc.
+
+### **Database**
+
+- Database: `wordpress`
+- User: `wordpress`
+- Password: `wordpress_password` (configured in secrets)
+
+## 🔧 Prerequisites
+
+- Kubernetes cluster with ingress controller (Traefik)
+- cert-manager for SSL certificates
+- kubectl configured to access your cluster
+- WordPress content at `../ethosenv/wordpress/`
+
+## 🛠️ Troubleshooting
+
+### **Common Issues:**
+
+1. **"No available server" error:**
+
+   ```bash
+   ./run-script.sh fix-ingress-issues
+   ```
+
+2. **URLs redirect to :8080:**
+
+   ```bash
+   ./run-script.sh fix-wordpress-urls
+   ```
+
+3. **WP-CLI not working:**
+
+   ```bash
+   ./run-script.sh install-wpcli-existing
+   ```
+
+4. **Content not migrated:**
+
+   ```bash
+   ./run-script.sh migrate-wordpress-content-alt
+   ```
+
+### **Diagnostic Commands:**
 
 ```bash
-# Deploy WordPress
-kubectl apply -f 05-wordpress-deployment.yaml
+# Full diagnostics
+./run-script.sh diagnose-wordpress
 
-# Wait for WordPress to be ready
-kubectl wait --for=condition=available --timeout=300s deployment/wordpress -n ethosenv
+# Check specific components
+./run-script.sh check-ingress-status
+./run-script.sh check-wordpress-urls
+./run-script.sh verify-deployment
 ```
 
-### Step 5: Configure SSL Certificates
+### **Manual Checks:**
 
 ```bash
-# Install cert-manager (if not already installed)
-./install-cert-manager.sh
+# Check pods
+kubectl get pods -n ethosenv
 
-# Create SSL certificate
-kubectl apply -f 08-ssl-certificate.yaml
+# Check services
+kubectl get services -n ethosenv
 
-# Check certificate status
-./check-ssl-status.sh
-```
-
-### Step 6: Configure External Access
-
-```bash
-# Create ingress with SSL
-kubectl apply -f 06-ingress.yaml
-
-# Get ingress IP
+# Check ingress
 kubectl get ingress -n ethosenv
+
+# Port-forward for testing
+kubectl port-forward svc/wordpress 8080:80 -n ethosenv
 ```
 
-## Migration from Docker Compose
+## 🔒 Security Notes
 
-### Content Migration
+- Change default passwords in `02-secrets.yaml`
+- Review WordPress security keys
+- Configure proper backup procedures
+- Monitor for security updates
+- SSL certificates are automatically managed by cert-manager
 
-The existing WordPress files need to be copied to the Kubernetes deployment:
+## 🎉 Success Indicators
 
-```bash
-# Migrate WordPress files and themes
-./migrate-wordpress-content.sh
-```
+After successful deployment:
 
-This script:
-- Creates an archive of the existing WordPress directory
-- Copies it to the WordPress pod
-- Extracts files with proper permissions
-- Preserves the Kubernetes-compatible wp-config.php
-
-### Database Migration
-
-Migrate the existing MySQL database:
-
-```bash
-# Option 1: Full automatic migration
-./migrate-database.sh full-migration
-
-# Option 2: Step-by-step migration
-./migrate-database.sh backup
-./migrate-database.sh restore
-./migrate-database.sh update-urls http://localhost:8080 http://wordpress.local
-```
-
-The database migration:
-- Creates a backup from the existing Docker setup
-- Restores the backup to the Kubernetes MySQL instance
-- Updates WordPress URLs to match the new deployment
-
-## SSL Certificate Management
-
-### Automatic Certificate Issuance
-
-The deployment uses cert-manager with Let's Encrypt to automatically issue and renew SSL certificates:
-
-- **Domain**: ethos.gray-beard.com
-- **Certificate Authority**: Let's Encrypt (production)
-- **Renewal**: Automatic (30 days before expiry)
-- **Challenge Type**: HTTP-01 (via ingress)
-
-### Certificate Status Commands
-
-```bash
-# Check overall SSL status
-./check-ssl-status.sh
-
-# Check certificate resource
-kubectl describe certificate ethos-ssl-cert -n ethosenv
-
-# Check TLS secret
-kubectl describe secret ethos-tls-secret -n ethosenv
-
-# Check cert-manager logs
-kubectl logs -n cert-manager deployment/cert-manager
-```
-
-### Troubleshooting SSL Issues
-
-1. **Certificate Pending**: Wait 5-10 minutes for Let's Encrypt validation
-2. **DNS Issues**: Ensure ethos.gray-beard.com points to your ingress IP
-3. **Firewall**: Ensure port 80 is accessible for HTTP-01 challenge
-4. **Rate Limits**: Let's Encrypt has rate limits; use staging issuer for testing
-
-## Configuration
-
-### Environment Variables
-
-WordPress configuration is managed through Kubernetes secrets:
-
-- `WORDPRESS_DB_HOST`: MySQL service hostname
-- `WORDPRESS_DB_USER`: Database username
-- `WORDPRESS_DB_PASSWORD`: Database password
-- `WORDPRESS_DB_NAME`: Database name
-- WordPress security keys and salts
-
-### Persistent Storage
-
-Two persistent volumes are created:
-- **MySQL Data**: 10Gi for database storage
-- **WordPress Files**: 5Gi for WordPress content
-
-### Security
-
-Security features implemented:
-- Non-root containers where possible
-- Security contexts with appropriate user/group IDs
-- Secrets for sensitive data
-- Network policies (can be added)
-
-## Monitoring and Maintenance
-
-### Check Deployment Status
-
-```bash
-# Check all resources
-kubectl get all -n ethosenv
-
-# Check persistent volumes
-kubectl get pvc -n ethosenv
-
-# Check pod logs
-kubectl logs -f deployment/wordpress -n ethosenv
-kubectl logs -f deployment/mysql -n ethosenv
-```
-
-### Database Backup
-
-```bash
-# Create database backup
-kubectl exec -n ethosenv deployment/mysql -- mysqldump -u root -proot_password wordpress > backup.sql
-
-# Restore from backup
-kubectl exec -i -n ethosenv deployment/mysql -- mysql -u root -proot_password wordpress < backup.sql
-```
-
-### Scaling
-
-```bash
-# Scale WordPress (MySQL should remain at 1 replica)
-kubectl scale deployment wordpress --replicas=3 -n ethosenv
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **PVC Not Binding**:
-   ```bash
-   kubectl describe pvc -n ethosenv
-   # Check storage class availability
-   kubectl get storageclass
-   ```
-
-2. **Database Connection Issues**:
-   ```bash
-   # Check MySQL pod logs
-   kubectl logs deployment/mysql -n ethosenv
-   
-   # Test database connection
-   kubectl exec -it deployment/mysql -n ethosenv -- mysql -u root -proot_password
-   ```
-
-3. **WordPress Not Loading**:
-   ```bash
-   # Check WordPress pod logs
-   kubectl logs deployment/wordpress -n ethosenv
-   
-   # Check file permissions
-   kubectl exec -it deployment/wordpress -n ethosenv -- ls -la /var/www/html
-   ```
-
-### Debug Commands
-
-```bash
-# Get pod shell access
-kubectl exec -it deployment/wordpress -n ethosenv -- bash
-kubectl exec -it deployment/mysql -n ethosenv -- bash
-
-# Check service connectivity
-kubectl exec -it deployment/wordpress -n ethosenv -- nslookup mysql
-
-# Check ingress status
-kubectl describe ingress wordpress-ingress -n ethosenv
-```
-
-## Production Considerations
-
-### Security Hardening
-
-1. **Update Secrets**: Generate strong, unique passwords and keys
-2. **SSL/TLS**: Configure proper SSL certificates
-3. **Network Policies**: Implement network segmentation
-4. **RBAC**: Set up proper role-based access control
-
-### Performance Optimization
-
-1. **Resource Limits**: Adjust CPU and memory limits based on load
-2. **Horizontal Scaling**: Scale WordPress pods based on traffic
-3. **Database Optimization**: Tune MySQL configuration
-4. **Caching**: Implement Redis or Memcached
-
-### Backup Strategy
-
-1. **Database Backups**: Set up automated database backups
-2. **File Backups**: Backup WordPress files and uploads
-3. **Disaster Recovery**: Test restore procedures
-
-### Monitoring
-
-1. **Health Checks**: Configure proper liveness and readiness probes
-2. **Metrics**: Set up Prometheus monitoring
-3. **Logging**: Centralize logs with ELK stack or similar
-4. **Alerting**: Configure alerts for critical issues
-
-## Support
-
-For issues or questions:
-1. Check the troubleshooting section
-2. Review Kubernetes and WordPress documentation
-3. Check pod logs for specific error messages
-4. Verify network connectivity and DNS resolution
+- ✅ Site accessible at `https://ethos.gray-beard.com`
+- ✅ WordPress admin at `https://ethos.gray-beard.com/wp-admin`
+- ✅ All content migrated from source
+- ✅ No URL issues or port redirects
+- ✅ SSL certificate working
+- ✅ WP-CLI available for management

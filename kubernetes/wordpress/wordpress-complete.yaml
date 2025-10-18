@@ -1,0 +1,532 @@
+# ===================================
+# WordPress with Nginx + PHP-FPM
+# Namespace: kampfzwerg
+# ===================================
+# This file contains all resources needed for WordPress deployment
+# including: MySQL, WordPress (Nginx+PHP-FPM), Memcached, Ingress, and Monitoring
+
+---
+# ===================================
+# Namespace
+# ===================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kampfzwerg
+
+---
+# ===================================
+# Persistent Volume Claims
+# ===================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data
+  namespace: kampfzwerg
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-client
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-data
+  namespace: kampfzwerg
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-client
+
+---
+# ===================================
+# Secrets (create these separately with actual values)
+# ===================================
+# kubectl create secret generic wordpress-db-credentials \
+#   -n kampfzwerg \
+#   --from-literal=db_password=YOUR_PASSWORD
+
+---
+# ===================================
+# ConfigMaps
+# ===================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: kampfzwerg
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        root /var/www/html;
+        index index.php;
+
+        client_max_body_size 20M;
+
+        location / {
+            try_files $uri $uri/ /index.php?$args;
+        }
+
+        location ~ \.php$ {
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+            fastcgi_read_timeout 300;
+        }
+
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+            expires max;
+            log_not_found off;
+        }
+
+        location = /favicon.ico {
+            log_not_found off;
+            access_log off;
+        }
+
+        location = /robots.txt {
+            allow all;
+            log_not_found off;
+            access_log off;
+        }
+
+        location ~ /\. {
+            deny all;
+        }
+
+        location ~* /(?:uploads|files)/.*\.php$ {
+            deny all;
+        }
+
+        # Server status for monitoring
+        location /nginx-status {
+            stub_status on;
+            access_log off;
+            allow 10.0.0.0/8;
+            allow 127.0.0.1;
+            deny all;
+        }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: php-fpm-config
+  namespace: kampfzwerg
+data:
+  php.ini: |
+    upload_max_filesize = 20M
+    post_max_size = 25M
+    memory_limit = 256M
+    max_execution_time = 300
+    max_input_vars = 3000
+    max_input_time = 300
+  www.conf: |
+    [www]
+    user = www-data
+    group = www-data
+    listen = 127.0.0.1:9000
+    listen.owner = www-data
+    listen.group = www-data
+    pm = dynamic
+    pm.max_children = 50
+    pm.start_servers = 5
+    pm.min_spare_servers = 5
+    pm.max_spare_servers = 35
+    pm.max_requests = 500
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wordpress-memcached-config
+  namespace: kampfzwerg
+data:
+  object-cache.php: |
+    <?php
+    # Memcached Object Cache configuration
+    # This file should be copied to /var/www/html/wp-content/object-cache.php
+    
+---
+# ===================================
+# MySQL Database
+# ===================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress-mysql
+  namespace: kampfzwerg
+  labels:
+    app: wordpress-mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wordpress-mysql
+  template:
+    metadata:
+      labels:
+        app: wordpress-mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        ports:
+        - containerPort: 3306
+          name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-db-credentials
+              key: db_password
+        - name: MYSQL_DATABASE
+          value: wordpress
+        - name: MYSQL_USER
+          value: wordpress
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-db-credentials
+              key: db_password
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-mysql
+  namespace: kampfzwerg
+  labels:
+    app: wordpress-mysql
+spec:
+  ports:
+  - port: 3306
+    targetPort: mysql
+    name: mysql
+  selector:
+    app: wordpress-mysql
+
+---
+# ===================================
+# Memcached
+# ===================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memcached
+  namespace: kampfzwerg
+  labels:
+    app: memcached
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memcached
+  template:
+    metadata:
+      labels:
+        app: memcached
+    spec:
+      containers:
+      - name: memcached
+        image: memcached:1.6.18-alpine
+        ports:
+        - containerPort: 11211
+          name: memcache
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        args:
+        - -m 256
+        - -I 5m  # Maximum object size (5MB)
+        - -c 1024  # Maximum connections
+        livenessProbe:
+          tcpSocket:
+            port: memcache
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          tcpSocket:
+            port: memcache
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memcached
+  namespace: kampfzwerg
+  labels:
+    app: memcached
+spec:
+  ports:
+  - port: 11211
+    targetPort: memcache
+    name: memcache
+  selector:
+    app: memcached
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: memcached-access
+  namespace: kampfzwerg
+spec:
+  podSelector:
+    matchLabels:
+      app: memcached
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: wordpress
+    ports:
+    - protocol: TCP
+      port: 11211
+  policyTypes:
+  - Ingress
+
+---
+# ===================================
+# WordPress (Nginx + PHP-FPM)
+# ===================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: kampfzwerg
+  labels:
+    app: wordpress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      initContainers:
+      - name: fix-permissions
+        image: debian:bullseye-slim
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          echo "Setting ownership to www-data:www-data"
+          chown -R 33:33 /var/www/html/
+          echo "Setting base permissions"
+          find /var/www/html -type d -exec chmod 755 {} \;
+          find /var/www/html -type f -exec chmod 644 {} \;
+          echo "Setting permissions for content directories"
+          chmod -R 775 /var/www/html/wp-content/
+          echo "Permissions updated successfully"
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+      containers:
+      # PHP-FPM container
+      - name: php-fpm
+        image: wordpress:6.4.3-fpm
+        command: ["php-fpm"]  # Override entrypoint to skip file copying
+        ports:
+        - containerPort: 9000
+          name: php-fpm
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: wordpress-mysql
+        - name: WORDPRESS_DB_USER
+          value: wordpress
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-db-credentials
+              key: db_password
+        - name: WORDPRESS_DB_NAME
+          value: wordpress
+        - name: WORDPRESS_CONFIG_EXTRA
+          value: |
+            define('WP_HOME', 'https://kampfzwerg.gray-beard.com');
+            define('WP_SITEURL', 'https://kampfzwerg.gray-beard.com');
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+        - name: php-fpm-config
+          mountPath: /usr/local/etc/php-fpm.d/www.conf
+          subPath: www.conf
+        - name: php-fpm-config
+          mountPath: /usr/local/etc/php/conf.d/custom.ini
+          subPath: php.ini
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 9000
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 6
+        readinessProbe:
+          tcpSocket:
+            port: 9000
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+      # Nginx container
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /nginx-status
+            port: 80
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 6
+        readinessProbe:
+          httpGet:
+            path: /nginx-status
+            port: 80
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: wordpress-data
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+      - name: php-fpm-config
+        configMap:
+          name: php-fpm-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: kampfzwerg
+  labels:
+    app: wordpress
+spec:
+  ports:
+  - port: 80
+    targetPort: http
+    name: http
+  selector:
+    app: wordpress
+
+---
+# ===================================
+# Ingress
+# ===================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wordpress
+  namespace: kampfzwerg
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: kampfzwerg.gray-beard.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: wordpress
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - kampfzwerg.gray-beard.com
+    secretName: wordpress-tls
+

@@ -1,0 +1,93 @@
+# Airflow Worker Horizontal Pod Autoscaler
+# This configuration implements requirements 5.1, 5.2, 5.3, 5.5, 5.6
+# Provides automatic scaling of Airflow worker pods based on CPU usage and queue depth
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: airflow-worker-hpa
+  namespace: airflow
+  labels:
+    app: airflow
+    component: worker
+    tier: airflow
+spec:
+  # Target the Airflow worker deployment
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: airflow-worker
+  
+  # Scaling configuration (Requirements 5.1, 5.4)
+  minReplicas: 2    # Minimum replicas for availability
+  maxReplicas: 10   # Maximum replicas to prevent resource exhaustion
+  
+  # Scaling metrics configuration (Requirements 5.2, 5.3)
+  metrics:
+    # CPU-based scaling - scale up when average CPU > 70%
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    
+    # Memory-based scaling - scale up when average memory > 80%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  
+  # Scaling behavior configuration (Requirements 5.5, 5.6)
+  behavior:
+    scaleUp:
+      # Scale up aggressively when needed
+      stabilizationWindowSeconds: 60  # Wait 1 minute before scaling up again
+      policies:
+        - type: Percent
+          value: 100    # Can double the number of pods
+          periodSeconds: 60
+        - type: Pods
+          value: 2      # Or add 2 pods at a time
+          periodSeconds: 60
+      selectPolicy: Max   # Use the more aggressive policy
+    
+    scaleDown:
+      # Scale down conservatively to avoid thrashing
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+        - type: Percent
+          value: 50     # Remove up to 50% of pods
+          periodSeconds: 300
+        - type: Pods
+          value: 1      # Or remove 1 pod at a time
+          periodSeconds: 300
+      selectPolicy: Min   # Use the more conservative policy
+
+---
+# ServiceMonitor for Airflow Worker metrics
+# This enables Prometheus to scrape worker metrics for custom scaling
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-worker-metrics
+  namespace: airflow
+  labels:
+    app: airflow
+    component: worker
+    tier: airflow
+spec:
+  selector:
+    matchLabels:
+      app: airflow
+      component: worker
+  endpoints:
+    - port: worker-logs
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - airflow

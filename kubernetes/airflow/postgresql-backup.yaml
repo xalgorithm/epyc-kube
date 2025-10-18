@@ -1,0 +1,233 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-backup-scripts
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: backup
+data:
+  backup.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Configuration
+    BACKUP_DIR="/var/lib/postgresql/backups"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_FILE="postgresql_backup_${TIMESTAMP}.sql"
+    COMPRESSED_FILE="${BACKUP_FILE}.gz"
+    RETENTION_DAYS=30
+    MONTHLY_RETENTION=12
+    
+    # Database connection parameters
+    export PGHOST="postgresql-primary"
+    export PGPORT="5432"
+    export PGUSER="$POSTGRES_USER"
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    export PGDATABASE="$POSTGRES_DB"
+    
+    # Create backup directory
+    mkdir -p "$BACKUP_DIR"
+    
+    echo "Starting PostgreSQL backup at $(date)"
+    
+    # Create database dump
+    pg_dump --verbose --clean --no-owner --no-privileges \
+        --format=custom \
+        --file="$BACKUP_DIR/$BACKUP_FILE" \
+        "$PGDATABASE"
+    
+    # Compress backup
+    gzip "$BACKUP_DIR/$BACKUP_FILE"
+    
+    # Verify backup integrity
+    if [ -f "$BACKUP_DIR/$COMPRESSED_FILE" ]; then
+        echo "Backup created successfully: $COMPRESSED_FILE"
+        echo "Backup size: $(du -h "$BACKUP_DIR/$COMPRESSED_FILE" | cut -f1)"
+    else
+        echo "ERROR: Backup file not found!"
+        exit 1
+    fi
+    
+    # Clean up old backups (daily retention)
+    echo "Cleaning up old daily backups..."
+    find "$BACKUP_DIR" -name "postgresql_backup_*.sql.gz" -type f -mtime +$RETENTION_DAYS -delete
+    
+    # Keep monthly backups (first backup of each month)
+    echo "Managing monthly backup retention..."
+    CURRENT_MONTH=$(date +%Y%m)
+    MONTHLY_BACKUP_FILE="postgresql_monthly_backup_${CURRENT_MONTH}.sql.gz"
+    
+    # If this is the first backup of the month, create a monthly backup
+    if [ ! -f "$BACKUP_DIR/$MONTHLY_BACKUP_FILE" ]; then
+        cp "$BACKUP_DIR/$COMPRESSED_FILE" "$BACKUP_DIR/$MONTHLY_BACKUP_FILE"
+        echo "Created monthly backup: $MONTHLY_BACKUP_FILE"
+    fi
+    
+    # Clean up old monthly backups
+    find "$BACKUP_DIR" -name "postgresql_monthly_backup_*.sql.gz" -type f -mtime +$((MONTHLY_RETENTION * 30)) -delete
+    
+    echo "Backup completed successfully at $(date)"
+    
+    # Optional: Upload to external storage
+    # if [ -n "$S3_BUCKET" ]; then
+    #     aws s3 cp "$BACKUP_DIR/$COMPRESSED_FILE" "s3://$S3_BUCKET/postgresql-backups/"
+    #     aws s3 cp "$BACKUP_DIR/$MONTHLY_BACKUP_FILE" "s3://$S3_BUCKET/postgresql-backups/monthly/"
+    # fi
+    
+  restore.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Configuration
+    BACKUP_DIR="/var/lib/postgresql/backups"
+    BACKUP_FILE="$1"
+    
+    if [ -z "$BACKUP_FILE" ]; then
+        echo "Usage: $0 <backup_file>"
+        echo "Available backups:"
+        ls -la "$BACKUP_DIR"/*.sql.gz 2>/dev/null || echo "No backups found"
+        exit 1
+    fi
+    
+    # Database connection parameters
+    export PGHOST="postgresql-primary"
+    export PGPORT="5432"
+    export PGUSER="$POSTGRES_USER"
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    export PGDATABASE="$POSTGRES_DB"
+    
+    echo "Starting PostgreSQL restore from $BACKUP_FILE at $(date)"
+    
+    # Verify backup file exists
+    if [ ! -f "$BACKUP_DIR/$BACKUP_FILE" ]; then
+        echo "ERROR: Backup file $BACKUP_DIR/$BACKUP_FILE not found!"
+        exit 1
+    fi
+    
+    # Create a temporary restore database
+    RESTORE_DB="restore_$(date +%s)"
+    createdb "$RESTORE_DB"
+    
+    # Restore from backup
+    if [[ "$BACKUP_FILE" == *.gz ]]; then
+        gunzip -c "$BACKUP_DIR/$BACKUP_FILE" | pg_restore --verbose --clean --no-owner --no-privileges --dbname="$RESTORE_DB"
+    else
+        pg_restore --verbose --clean --no-owner --no-privileges --dbname="$RESTORE_DB" "$BACKUP_DIR/$BACKUP_FILE"
+    fi
+    
+    echo "Restore completed successfully to database: $RESTORE_DB"
+    echo "To switch to restored database, run:"
+    echo "  ALTER DATABASE $PGDATABASE RENAME TO ${PGDATABASE}_old;"
+    echo "  ALTER DATABASE $RESTORE_DB RENAME TO $PGDATABASE;"
+    
+  cleanup.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Configuration
+    BACKUP_DIR="/var/lib/postgresql/backups"
+    RETENTION_DAYS=30
+    MONTHLY_RETENTION=12
+    
+    echo "Starting backup cleanup at $(date)"
+    
+    # Clean up old daily backups
+    echo "Removing daily backups older than $RETENTION_DAYS days..."
+    DELETED_DAILY=$(find "$BACKUP_DIR" -name "postgresql_backup_*.sql.gz" -type f -mtime +$RETENTION_DAYS -delete -print | wc -l)
+    echo "Deleted $DELETED_DAILY old daily backups"
+    
+    # Clean up old monthly backups
+    echo "Removing monthly backups older than $MONTHLY_RETENTION months..."
+    DELETED_MONTHLY=$(find "$BACKUP_DIR" -name "postgresql_monthly_backup_*.sql.gz" -type f -mtime +$((MONTHLY_RETENTION * 30)) -delete -print | wc -l)
+    echo "Deleted $DELETED_MONTHLY old monthly backups"
+    
+    # Show current backup status
+    echo "Current backup status:"
+    echo "Daily backups: $(find "$BACKUP_DIR" -name "postgresql_backup_*.sql.gz" -type f | wc -l)"
+    echo "Monthly backups: $(find "$BACKUP_DIR" -name "postgresql_monthly_backup_*.sql.gz" -type f | wc -l)"
+    echo "Total backup size: $(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1 || echo "0")"
+    
+    echo "Cleanup completed at $(date)"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgresql-backup
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: backup
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: postgresql
+            component: backup
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+          containers:
+          - name: backup
+            image: postgres:15-alpine
+            command:
+            - /bin/bash
+            - /scripts/backup.sh
+            env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_DB
+            volumeMounts:
+            - name: backup-scripts
+              mountPath: /scripts
+            - name: backup-storage
+              mountPath: /var/lib/postgresql/backups
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+          volumes:
+          - name: backup-scripts
+            configMap:
+              name: postgresql-backup-scripts
+              defaultMode: 0755
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: postgresql-backup-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-backup-pvc
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: postgresql-storage
+  resources:
+    requests:
+      storage: 50Gi

@@ -1,0 +1,86 @@
+# Airflow Ingress with TLS and Security Configuration
+# Requirements: 4.2, 4.6, 7.1, 7.2
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: airflow-tls
+  namespace: airflow
+  annotations:
+    # Use Traefik as ingress controller
+    kubernetes.io/ingress.class: "traefik"
+    # Use cert-manager with Let's Encrypt production issuer
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Force HTTPS and enable TLS
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    # Apply security middlewares
+    traefik.ingress.kubernetes.io/router.middlewares: "airflow-security-headers@kubernetescrd,airflow-rate-limit@kubernetescrd,kube-system-redirect-https@kubernetescrd"
+spec:
+  tls:
+  - hosts:
+    - airflow.gray-beard.com
+    secretName: airflow-tls-secret
+  rules:
+  - host: airflow.gray-beard.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: airflow-webserver
+            port:
+              number: 8080
+---
+# Security Headers Middleware
+# Implements security headers for enhanced protection (Requirement 4.6)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: airflow
+spec:
+  headers:
+    # Security headers
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+    customResponseHeaders:
+      X-Frame-Options: "DENY"
+      X-Content-Type-Options: "nosniff"
+      X-XSS-Protection: "1; mode=block"
+      Referrer-Policy: "strict-origin-when-cross-origin"
+      Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';"
+      Strict-Transport-Security: "max-age=31536000; includeSubDomains; preload"
+      Permissions-Policy: "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), speaker=(), vibrate=(), fullscreen=(self), sync-xhr=()"
+---
+# Rate Limiting Middleware
+# Implements DDoS protection and rate limiting (Requirement 7.2)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit
+  namespace: airflow
+spec:
+  rateLimit:
+    # 100 requests per minute per IP (as specified in design)
+    average: 100
+    period: 1m
+    # Allow bursts up to 200 requests
+    burst: 200
+    # Apply rate limiting per source IP
+    sourceCriterion:
+      ipStrategy:
+        depth: 1
+---
+# HTTP to HTTPS Redirect Middleware (if not already exists in kube-system)
+# Ensures all traffic is encrypted (Requirement 4.2)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: kube-system
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+    port: "443"

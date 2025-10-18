@@ -1,0 +1,307 @@
+# Airflow Security Policies
+# This file contains network policies and security configurations
+# for enhanced security in the Airflow deployment
+
+---
+# Network Policy - Deny all ingress by default
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airflow-deny-all-ingress
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: security
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+---
+# Network Policy - Allow webserver ingress from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airflow-webserver-ingress
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: webserver
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: webserver
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow ingress from Traefik ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow ingress from monitoring namespace for metrics scraping
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Network Policy - Allow scheduler to communicate with database and redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airflow-scheduler-egress
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: scheduler
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: scheduler
+  policyTypes:
+  - Egress
+  egress:
+  # Allow communication with PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow communication with Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 26379
+  # Allow communication with workers
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: worker
+    ports:
+    - protocol: TCP
+      port: 8793
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS for external connections (Vault, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# Network Policy - Allow workers to communicate with database and redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airflow-worker-egress
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: worker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: worker
+  policyTypes:
+  - Egress
+  egress:
+  # Allow communication with PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow communication with Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 26379
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS for external connections
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# Network Policy - Allow webserver to communicate with database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airflow-webserver-egress
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: webserver
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: webserver
+  policyTypes:
+  - Egress
+  egress:
+  # Allow communication with PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow communication with Redis for session storage
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 26379
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS for external connections (auth, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# Network Policy - Allow monitoring access to all Airflow components
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: airflow-monitoring-ingress
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: airflow
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow Prometheus scraping from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8793
+    - protocol: TCP
+      port: 9102
+
+---
+# Network Policy - Allow database access from Airflow components
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-airflow-ingress
+  namespace: airflow
+  labels:
+    app: postgresql
+    app.kubernetes.io/component: database
+spec:
+  podSelector:
+    matchLabels:
+      app: postgresql
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow access from Airflow components
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: airflow
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow monitoring access
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9187
+
+---
+# Network Policy - Allow Redis access from Airflow components
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-airflow-ingress
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: queue
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow access from Airflow components
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: airflow
+    ports:
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 26379
+  # Allow monitoring access
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9121

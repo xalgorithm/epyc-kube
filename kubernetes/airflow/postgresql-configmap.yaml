@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-config
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: database
+data:
+  postgresql.conf: |
+    # PostgreSQL configuration for high availability
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    maintenance_work_mem = 64MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    
+    # Replication settings
+    wal_level = replica
+    max_wal_senders = 3
+    max_replication_slots = 3
+    hot_standby = on
+    hot_standby_feedback = on
+    
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_rotation_age = 1d
+    log_rotation_size = 100MB
+    log_min_duration_statement = 1000
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    log_checkpoints = on
+    log_connections = on
+    log_disconnections = on
+    log_lock_waits = on
+    
+    # Archive settings for backup
+    archive_mode = on
+    archive_command = '/usr/local/bin/archive_wal.sh %p %f'
+    archive_timeout = 300
+
+  pg_hba.conf: |
+    # PostgreSQL Client Authentication Configuration File
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            md5
+    host    all             all             ::1/128                 md5
+    host    all             all             0.0.0.0/0               md5
+    host    replication     replicator      0.0.0.0/0               md5
+
+  init-primary.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Initialize primary database
+    if [ ! -s "$PGDATA/PG_VERSION" ]; then
+        echo "Initializing primary PostgreSQL database..."
+        initdb -D "$PGDATA" --auth-host=md5 --auth-local=trust
+        
+        # Create replication user
+        pg_ctl -D "$PGDATA" -o "-c listen_addresses='localhost'" -w start
+        
+        # Create replication user and airflow database
+        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE USER replicator WITH REPLICATION ENCRYPTED PASSWORD '$POSTGRES_REPLICATION_PASSWORD';"
+        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE DATABASE airflow OWNER $POSTGRES_USER;"
+        
+        pg_ctl -D "$PGDATA" -m fast -w stop
+    fi
+
+  init-standby.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Initialize standby database
+    if [ ! -s "$PGDATA/PG_VERSION" ]; then
+        echo "Initializing standby PostgreSQL database..."
+        until pg_isready -h postgresql-primary -p 5432 -U replicator; do
+            echo "Waiting for primary database to be ready..."
+            sleep 5
+        done
+        
+        pg_basebackup -h postgresql-primary -D "$PGDATA" -U replicator -v -P -W
+        
+        # Create recovery configuration
+        echo "# Standby server configuration" > "$PGDATA/standby.signal"
+        
+        # Create postgresql.auto.conf
+        echo "primary_conninfo = 'host=postgresql-primary port=5432 user=replicator password=\$POSTGRES_REPLICATION_PASSWORD'" > "$PGDATA/postgresql.auto.conf"
+        echo "promote_trigger_file = '/tmp/promote_trigger'" >> "$PGDATA/postgresql.auto.conf"
+    fi
+
+  archive_wal.sh: |
+    #!/bin/bash
+    # WAL archiving script for backup
+    WAL_PATH=$1
+    WAL_FILE=$2
+    ARCHIVE_DIR="/var/lib/postgresql/archive"
+    
+    # Create archive directory if it doesn't exist
+    mkdir -p "$ARCHIVE_DIR"
+    
+    # Copy WAL file to archive
+    cp "$WAL_PATH" "$ARCHIVE_DIR/$WAL_FILE"
+    
+    # Optional: Upload to external storage (S3, etc.)
+    # aws s3 cp "$ARCHIVE_DIR/$WAL_FILE" s3://your-backup-bucket/wal-archive/
+    
+    exit 0

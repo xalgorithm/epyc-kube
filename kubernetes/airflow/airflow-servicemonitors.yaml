@@ -1,0 +1,152 @@
+# Airflow ServiceMonitor Resources for Prometheus Scraping
+# This configuration creates ServiceMonitor resources for all Airflow components
+# Requirements: 3.1, 3.7 - Expose Airflow metrics to Prometheus
+
+---
+# ServiceMonitor for Airflow StatsD Exporter
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-statsd-exporter
+  namespace: airflow
+  labels:
+    app: airflow
+    component: statsd-exporter
+    tier: monitoring
+    prometheus: kube-prometheus-stack-prometheus
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: airflow
+      component: statsd-exporter
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+
+---
+# ServiceMonitor for Airflow Webserver
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-webserver
+  namespace: airflow
+  labels:
+    app: airflow
+    component: webserver
+    tier: monitoring
+    prometheus: kube-prometheus-stack-prometheus
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow
+      app.kubernetes.io/component: webserver
+  endpoints:
+  - port: airflow-ui
+    path: /admin/metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+    # Add basic auth if needed
+    basicAuth:
+      username:
+        name: airflow-webserver-metrics-auth
+        key: username
+      password:
+        name: airflow-webserver-metrics-auth
+        key: password
+
+---
+# ServiceMonitor for Airflow Scheduler
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-scheduler
+  namespace: airflow
+  labels:
+    app: airflow
+    component: scheduler
+    tier: monitoring
+    prometheus: kube-prometheus-stack-prometheus
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow
+      app.kubernetes.io/component: scheduler
+  endpoints:
+  - port: worker-logs
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+
+---
+# ServiceMonitor for Airflow Workers
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-workers
+  namespace: airflow
+  labels:
+    app: airflow
+    component: worker
+    tier: monitoring
+    prometheus: kube-prometheus-stack-prometheus
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow
+      app.kubernetes.io/component: worker
+  endpoints:
+  - port: worker-logs
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+
+---
+# ServiceMonitor for Flower (Celery monitoring)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-flower
+  namespace: airflow
+  labels:
+    app: airflow
+    component: flower
+    tier: monitoring
+    prometheus: kube-prometheus-stack-prometheus
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow
+      app.kubernetes.io/component: flower
+  endpoints:
+  - port: flower-ui
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true
+
+---
+# Secret for webserver metrics authentication (if needed)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: airflow-webserver-metrics-auth
+  namespace: airflow
+  labels:
+    app: airflow
+    component: webserver
+    tier: monitoring
+type: Opaque
+stringData:
+  username: "metrics"
+  password: "metrics-password-change-me"

@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: config
+data:
+  redis.conf: |
+    # Redis configuration for Airflow message queuing
+    port 6379
+    bind 0.0.0.0
+    protected-mode no
+    
+    # Persistence configuration - AOF and RDB snapshots
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # AOF configuration
+    appendonly yes
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    # Memory management
+    maxmemory-policy allkeys-lru
+    
+    # Logging
+    loglevel notice
+    
+    # Security
+    requirepass ${REDIS_PASSWORD}
+    
+    # Replication settings
+    replica-read-only yes
+    
+  sentinel.conf: |
+    # Redis Sentinel configuration
+    port 26379
+    bind 0.0.0.0
+    
+    # Monitor the Redis master (using localhost since both containers are in the same pod)
+    sentinel monitor mymaster 127.0.0.1 6379 2
+    sentinel auth-pass mymaster ${REDIS_PASSWORD}
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel parallel-syncs mymaster 1
+    sentinel failover-timeout mymaster 10000
+    
+    # Logging
+    loglevel notice
+    
+    # Security
+    requirepass ${REDIS_PASSWORD}

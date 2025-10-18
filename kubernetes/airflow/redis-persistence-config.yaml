@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-persistence-config
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: persistence-config
+data:
+  redis-persistence.conf: |
+    # Redis Persistence Configuration for Airflow Message Queuing
+    
+    # RDB Snapshots Configuration
+    # Save snapshot if at least 1 key changed in 900 seconds (15 minutes)
+    save 900 1
+    # Save snapshot if at least 10 keys changed in 300 seconds (5 minutes)
+    save 300 10
+    # Save snapshot if at least 10000 keys changed in 60 seconds (1 minute)
+    save 60 10000
+    
+    # RDB file settings
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+    
+    # AOF (Append Only File) Configuration
+    appendonly yes
+    appendfilename "appendonly.aof"
+    
+    # AOF fsync policy
+    # everysec: fsync every second (good compromise between performance and durability)
+    appendfsync everysec
+    
+    # Disable fsync during rewrites to avoid blocking
+    no-appendfsync-on-rewrite no
+    
+    # AOF rewrite configuration
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    
+    # AOF loading behavior
+    aof-load-truncated yes
+    
+    # Mixed persistence (RDB + AOF)
+    aof-use-rdb-preamble yes
+    
+    # Memory management for persistence
+    stop-writes-on-bgsave-error yes
+    
+    # Lazy freeing for better performance
+    lazyfree-lazy-eviction yes
+    lazyfree-lazy-expire yes
+    lazyfree-lazy-server-del yes
+    replica-lazy-flush yes

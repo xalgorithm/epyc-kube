@@ -1,0 +1,77 @@
+# PostgreSQL Storage Configuration with Dynamic Provisioning
+# Uses existing storage classes for automatic volume provisioning
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: postgresql-storage
+  labels:
+    app: postgresql
+    component: storage
+# Use NFS storage for better performance and reliability
+provisioner: cluster.local/nfs-subdir-external-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+parameters:
+  # Archive old data instead of deleting
+  archiveOnDelete: "true"
+  # Use a dedicated path for PostgreSQL data
+  pathPattern: "postgresql/${.PVC.namespace}/${.PVC.name}"
+
+---
+# Fallback storage class using local-path if NFS is not preferred
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: postgresql-storage-local
+  labels:
+    app: postgresql
+    component: storage
+    type: fallback
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+
+---
+# PostgreSQL Primary PVC - Uses dynamic provisioning
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-primary-pvc
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: primary
+  annotations:
+    # Ensure this PVC gets priority scheduling
+    volume.beta.kubernetes.io/storage-provisioner: cluster.local/nfs-subdir-external-provisioner
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: postgresql-storage
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# PostgreSQL Standby PVC - Uses dynamic provisioning
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-standby-pvc
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: standby
+  annotations:
+    # Ensure this PVC gets priority scheduling
+    volume.beta.kubernetes.io/storage-provisioner: cluster.local/nfs-subdir-external-provisioner
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: postgresql-storage
+  resources:
+    requests:
+      storage: 100Gi

@@ -1,0 +1,381 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-monitoring-scripts
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: monitoring
+data:
+  health-check.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Database connection parameters
+    PRIMARY_HOST="postgresql-primary"
+    STANDBY_HOST="postgresql-standby"
+    PORT="5432"
+    
+    export PGUSER="$POSTGRES_USER"
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    export PGDATABASE="$POSTGRES_DB"
+    
+    echo "=== PostgreSQL Health Check $(date) ==="
+    
+    # Check primary database
+    echo "Checking primary database..."
+    if pg_isready -h "$PRIMARY_HOST" -p "$PORT" -U "$PGUSER"; then
+        echo "✓ Primary database is accepting connections"
+        
+        # Check if primary is actually primary
+        RECOVERY_STATUS=$(psql -h "$PRIMARY_HOST" -p "$PORT" -t -c "SELECT pg_is_in_recovery();" 2>/dev/null || echo "ERROR")
+        if [ "$RECOVERY_STATUS" = " f" ]; then
+            echo "✓ Primary database is in primary mode"
+        else
+            echo "✗ Primary database is in recovery mode (should be primary)"
+        fi
+        
+        # Check replication status
+        REPLICATION_COUNT=$(psql -h "$PRIMARY_HOST" -p "$PORT" -t -c "SELECT count(*) FROM pg_stat_replication;" 2>/dev/null || echo "0")
+        echo "Active replication connections: $REPLICATION_COUNT"
+        
+    else
+        echo "✗ Primary database is not accepting connections"
+    fi
+    
+    echo ""
+    
+    # Check standby database
+    echo "Checking standby database..."
+    if pg_isready -h "$STANDBY_HOST" -p "$PORT" -U "$PGUSER"; then
+        echo "✓ Standby database is accepting connections"
+        
+        # Check if standby is actually standby
+        RECOVERY_STATUS=$(psql -h "$STANDBY_HOST" -p "$PORT" -t -c "SELECT pg_is_in_recovery();" 2>/dev/null || echo "ERROR")
+        if [ "$RECOVERY_STATUS" = " t" ]; then
+            echo "✓ Standby database is in recovery mode"
+            
+            # Check replication lag
+            LAG=$(psql -h "$STANDBY_HOST" -p "$PORT" -t -c "SELECT EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp()));" 2>/dev/null || echo "ERROR")
+            if [ "$LAG" != "ERROR" ] && [ -n "$LAG" ]; then
+                echo "Replication lag: ${LAG} seconds"
+                if (( $(echo "$LAG > 60" | bc -l) )); then
+                    echo "⚠ Warning: Replication lag is high (>60 seconds)"
+                fi
+            fi
+        else
+            echo "✗ Standby database is not in recovery mode (should be standby)"
+        fi
+        
+    else
+        echo "✗ Standby database is not accepting connections"
+    fi
+    
+    echo ""
+    echo "=== Health Check Complete ==="
+    
+  connection-test.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Database connection parameters
+    HOST="$1"
+    PORT="${2:-5432}"
+    
+    if [ -z "$HOST" ]; then
+        echo "Usage: $0 <host> [port]"
+        echo "Example: $0 postgresql-primary 5432"
+        exit 1
+    fi
+    
+    export PGUSER="$POSTGRES_USER"
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    export PGDATABASE="$POSTGRES_DB"
+    
+    echo "Testing connection to $HOST:$PORT..."
+    
+    # Test basic connectivity
+    if pg_isready -h "$HOST" -p "$PORT" -U "$PGUSER"; then
+        echo "✓ Database is accepting connections"
+    else
+        echo "✗ Database is not accepting connections"
+        exit 1
+    fi
+    
+    # Test actual query execution
+    echo "Testing query execution..."
+    RESULT=$(psql -h "$HOST" -p "$PORT" -t -c "SELECT 'Connection test successful' as status, now() as timestamp;" 2>/dev/null || echo "ERROR")
+    
+    if [ "$RESULT" != "ERROR" ]; then
+        echo "✓ Query execution successful"
+        echo "Result: $RESULT"
+    else
+        echo "✗ Query execution failed"
+        exit 1
+    fi
+    
+    # Test database-specific operations
+    echo "Testing database operations..."
+    
+    # Create test table
+    psql -h "$HOST" -p "$PORT" -c "CREATE TABLE IF NOT EXISTS connection_test (id SERIAL PRIMARY KEY, test_time TIMESTAMP DEFAULT NOW());" >/dev/null
+    
+    # Insert test data
+    psql -h "$HOST" -p "$PORT" -c "INSERT INTO connection_test DEFAULT VALUES;" >/dev/null
+    
+    # Query test data
+    COUNT=$(psql -h "$HOST" -p "$PORT" -t -c "SELECT COUNT(*) FROM connection_test;" | tr -d ' ')
+    echo "✓ Database operations successful (test records: $COUNT)"
+    
+    # Clean up test table
+    psql -h "$HOST" -p "$PORT" -c "DROP TABLE IF EXISTS connection_test;" >/dev/null
+    
+    echo "Connection test completed successfully!"
+    
+  failover-test.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Configuration
+    PRIMARY_HOST="postgresql-primary"
+    STANDBY_HOST="postgresql-standby"
+    PORT="5432"
+    
+    export PGUSER="$POSTGRES_USER"
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    export PGDATABASE="$POSTGRES_DB"
+    
+    echo "=== PostgreSQL Failover Test $(date) ==="
+    echo "⚠ WARNING: This is a destructive test that will simulate primary failure"
+    echo "Press Ctrl+C within 10 seconds to cancel..."
+    sleep 10
+    
+    # Step 1: Verify initial state
+    echo "Step 1: Verifying initial state..."
+    
+    PRIMARY_STATUS=$(psql -h "$PRIMARY_HOST" -p "$PORT" -t -c "SELECT pg_is_in_recovery();" 2>/dev/null || echo "ERROR")
+    STANDBY_STATUS=$(psql -h "$STANDBY_HOST" -p "$PORT" -t -c "SELECT pg_is_in_recovery();" 2>/dev/null || echo "ERROR")
+    
+    if [ "$PRIMARY_STATUS" != " f" ] || [ "$STANDBY_STATUS" != " t" ]; then
+        echo "✗ Initial state is incorrect. Primary should be primary (f), standby should be standby (t)"
+        echo "Primary status: $PRIMARY_STATUS, Standby status: $STANDBY_STATUS"
+        exit 1
+    fi
+    
+    echo "✓ Initial state verified: Primary is primary, Standby is standby"
+    
+    # Step 2: Create test data on primary
+    echo "Step 2: Creating test data on primary..."
+    TEST_TABLE="failover_test_$(date +%s)"
+    psql -h "$PRIMARY_HOST" -p "$PORT" -c "CREATE TABLE $TEST_TABLE (id SERIAL PRIMARY KEY, data TEXT, created_at TIMESTAMP DEFAULT NOW());"
+    psql -h "$PRIMARY_HOST" -p "$PORT" -c "INSERT INTO $TEST_TABLE (data) VALUES ('Before failover test');"
+    
+    INITIAL_COUNT=$(psql -h "$PRIMARY_HOST" -p "$PORT" -t -c "SELECT COUNT(*) FROM $TEST_TABLE;" | tr -d ' ')
+    echo "✓ Test data created: $INITIAL_COUNT records"
+    
+    # Step 3: Wait for replication
+    echo "Step 3: Waiting for replication to standby..."
+    sleep 5
+    
+    STANDBY_COUNT=$(psql -h "$STANDBY_HOST" -p "$PORT" -t -c "SELECT COUNT(*) FROM $TEST_TABLE;" 2>/dev/null | tr -d ' ' || echo "0")
+    if [ "$STANDBY_COUNT" = "$INITIAL_COUNT" ]; then
+        echo "✓ Data replicated to standby: $STANDBY_COUNT records"
+    else
+        echo "⚠ Warning: Data not fully replicated (Primary: $INITIAL_COUNT, Standby: $STANDBY_COUNT)"
+    fi
+    
+    # Step 4: Simulate primary failure (scale down primary)
+    echo "Step 4: Simulating primary failure..."
+    kubectl scale statefulset postgresql-primary --replicas=0 -n airflow
+    
+    # Wait for primary to be unavailable
+    echo "Waiting for primary to become unavailable..."
+    for i in {1..30}; do
+        if ! pg_isready -h "$PRIMARY_HOST" -p "$PORT" -U "$PGUSER" >/dev/null 2>&1; then
+            echo "✓ Primary is now unavailable"
+            break
+        fi
+        sleep 2
+    done
+    
+    # Step 5: Promote standby to primary
+    echo "Step 5: Promoting standby to primary..."
+    kubectl exec -n airflow postgresql-standby-0 -- touch /tmp/promote_trigger
+    
+    # Wait for promotion
+    echo "Waiting for standby promotion..."
+    for i in {1..60}; do
+        NEW_STATUS=$(psql -h "$STANDBY_HOST" -p "$PORT" -t -c "SELECT pg_is_in_recovery();" 2>/dev/null || echo "ERROR")
+        if [ "$NEW_STATUS" = " f" ]; then
+            echo "✓ Standby promoted to primary successfully"
+            break
+        fi
+        sleep 2
+    done
+    
+    # Step 6: Verify data integrity
+    echo "Step 6: Verifying data integrity on new primary..."
+    FINAL_COUNT=$(psql -h "$STANDBY_HOST" -p "$PORT" -t -c "SELECT COUNT(*) FROM $TEST_TABLE;" | tr -d ' ')
+    
+    if [ "$FINAL_COUNT" = "$INITIAL_COUNT" ]; then
+        echo "✓ Data integrity verified: $FINAL_COUNT records"
+    else
+        echo "✗ Data integrity issue: Expected $INITIAL_COUNT, found $FINAL_COUNT"
+    fi
+    
+    # Step 7: Test write operations on new primary
+    echo "Step 7: Testing write operations on new primary..."
+    psql -h "$STANDBY_HOST" -p "$PORT" -c "INSERT INTO $TEST_TABLE (data) VALUES ('After failover test');"
+    
+    WRITE_TEST_COUNT=$(psql -h "$STANDBY_HOST" -p "$PORT" -t -c "SELECT COUNT(*) FROM $TEST_TABLE;" | tr -d ' ')
+    if [ "$WRITE_TEST_COUNT" -gt "$FINAL_COUNT" ]; then
+        echo "✓ Write operations successful on new primary"
+    else
+        echo "✗ Write operations failed on new primary"
+    fi
+    
+    # Step 8: Cleanup
+    echo "Step 8: Cleaning up test data..."
+    psql -h "$STANDBY_HOST" -p "$PORT" -c "DROP TABLE IF EXISTS $TEST_TABLE;"
+    
+    # Step 9: Restore original primary (optional)
+    echo "Step 9: Restoring original primary..."
+    echo "To restore the original primary, you need to:"
+    echo "1. Rebuild the original primary as a new standby"
+    echo "2. Configure it to replicate from the current primary"
+    echo "3. Optionally fail back when ready"
+    
+    kubectl scale statefulset postgresql-primary --replicas=1 -n airflow
+    
+    echo ""
+    echo "=== Failover Test Complete ==="
+    echo "Current primary: $STANDBY_HOST (was standby)"
+    echo "Original primary: $PRIMARY_HOST (scaled down, needs reconfiguration)"
+    
+  replication-status.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Database connection parameters
+    PRIMARY_HOST="postgresql-primary"
+    STANDBY_HOST="postgresql-standby"
+    PORT="5432"
+    
+    export PGUSER="$POSTGRES_USER"
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    export PGDATABASE="$POSTGRES_DB"
+    
+    echo "=== PostgreSQL Replication Status $(date) ==="
+    
+    # Check primary replication status
+    echo "Primary Database Replication Status:"
+    echo "-----------------------------------"
+    
+    if pg_isready -h "$PRIMARY_HOST" -p "$PORT" -U "$PGUSER" >/dev/null 2>&1; then
+        psql -h "$PRIMARY_HOST" -p "$PORT" -c "
+        SELECT 
+            client_addr as standby_ip,
+            state,
+            sent_lsn,
+            write_lsn,
+            flush_lsn,
+            replay_lsn,
+            write_lag,
+            flush_lag,
+            replay_lag,
+            sync_state
+        FROM pg_stat_replication;
+        "
+        
+        echo ""
+        echo "WAL Status:"
+        psql -h "$PRIMARY_HOST" -p "$PORT" -c "
+        SELECT 
+            pg_current_wal_lsn() as current_wal_lsn,
+            pg_wal_lsn_diff(pg_current_wal_lsn(), '0/0') as wal_bytes
+        ;
+        "
+    else
+        echo "✗ Primary database is not available"
+    fi
+    
+    echo ""
+    echo "Standby Database Status:"
+    echo "------------------------"
+    
+    if pg_isready -h "$STANDBY_HOST" -p "$PORT" -U "$PGUSER" >/dev/null 2>&1; then
+        psql -h "$STANDBY_HOST" -p "$PORT" -c "
+        SELECT 
+            pg_is_in_recovery() as in_recovery,
+            pg_last_wal_receive_lsn() as last_received_lsn,
+            pg_last_wal_replay_lsn() as last_replayed_lsn,
+            pg_last_xact_replay_timestamp() as last_replay_time,
+            EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp())) as lag_seconds
+        ;
+        "
+    else
+        echo "✗ Standby database is not available"
+    fi
+    
+    echo ""
+    echo "=== Replication Status Complete ==="
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgresql-health-check
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: monitoring
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: postgresql
+            component: monitoring
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+          containers:
+          - name: health-check
+            image: postgres:15-alpine
+            command:
+            - /bin/bash
+            - /scripts/health-check.sh
+            env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: POSTGRES_DB
+            volumeMounts:
+            - name: monitoring-scripts
+              mountPath: /scripts
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+          volumes:
+          - name: monitoring-scripts
+            configMap:
+              name: postgresql-monitoring-scripts
+              defaultMode: 0755

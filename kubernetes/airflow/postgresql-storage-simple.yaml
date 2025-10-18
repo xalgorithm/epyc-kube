@@ -1,0 +1,35 @@
+# Simplified PostgreSQL Storage Configuration
+# Uses existing nfs-client storage class for immediate provisioning
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-primary-pvc
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: primary
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client  # Use existing NFS storage class
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-standby-pvc
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: standby
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client  # Use existing NFS storage class
+  resources:
+    requests:
+      storage: 100Gi

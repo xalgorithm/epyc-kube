@@ -1,0 +1,279 @@
+# Airflow Helm Chart Values - High Availability Configuration
+# This configuration implements requirements 1.1, 1.2, 1.3, 1.4, 5.4
+
+# Global Airflow configuration
+airflow:
+  # Use CeleryKubernetesExecutor for hybrid execution (Requirement 5.4)
+  executor: CeleryKubernetesExecutor
+  
+  # Airflow configuration - Using Vault-managed secrets
+  config:
+    AIRFLOW__CORE__EXECUTOR: CeleryKubernetesExecutor
+    # Database connection will be set via secret environment variables
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN_SECRET: airflow-database-secret
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN_SECRET_KEY: CONNECTION_STRING
+    # Redis connection will be set via secret environment variables
+    AIRFLOW__CELERY__BROKER_URL_SECRET: airflow-redis-secret
+    AIRFLOW__CELERY__BROKER_URL_SECRET_KEY: CONNECTION_STRING
+    AIRFLOW__CELERY__RESULT_BACKEND_SECRET: airflow-database-secret
+    AIRFLOW__CELERY__RESULT_BACKEND_SECRET_KEY: CONNECTION_STRING
+    AIRFLOW__WEBSERVER__RBAC: "True"
+    AIRFLOW__WEBSERVER__AUTHENTICATE: "True"
+    # Webserver secrets will be set via secret environment variables
+    AIRFLOW__WEBSERVER__SECRET_KEY_SECRET: airflow-webserver-secret
+    AIRFLOW__WEBSERVER__SECRET_KEY_SECRET_KEY: WEBSERVER_SECRET_KEY
+    AIRFLOW__CORE__FERNET_KEY_SECRET: airflow-webserver-secret
+    AIRFLOW__CORE__FERNET_KEY_SECRET_KEY: FERNET_KEY
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "True"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "16"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "16"
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "300"
+    AIRFLOW__SCHEDULER__CATCHUP_BY_DEFAULT: "False"
+    # StatsD metrics configuration (Task 10 - Requirements 3.1, 3.7)
+    AIRFLOW__METRICS__STATSD_ON: "True"
+    AIRFLOW__METRICS__STATSD_HOST: "airflow-statsd-exporter"
+    AIRFLOW__METRICS__STATSD_PORT: "9125"
+    AIRFLOW__METRICS__STATSD_PREFIX: "airflow"
+
+# Webserver configuration - High Availability (Requirements 1.1, 1.3)
+webserver:
+  # Multiple replicas for high availability
+  replicas: 2
+  
+  # Resource configuration (Design: 2 CPU cores, 4Gi memory per pod)
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  
+  # Health checks for reliability (Requirement 1.3)
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 5
+    httpGet:
+      path: /health
+      port: 8080
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    httpGet:
+      path: /health
+      port: 8080
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+
+# Scheduler configuration - High Availability (Requirements 1.2, 1.4)
+scheduler:
+  # Multiple replicas with leader election for HA
+  replicas: 2
+  
+  # Resource configuration (Design: 2 CPU cores, 4Gi memory per pod)
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  
+  # Health checks for reliability (Requirement 1.4)
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 5
+  
+  # Leader election configuration for HA
+  env:
+    - name: AIRFLOW__SCHEDULER__STANDALONE_DAG_PROCESSOR
+      value: "False"
+
+# Worker configuration for CeleryExecutor (Requirement 5.4)
+workers:
+  # Initial replica count (will be managed by HPA in task 8)
+  replicas: 2
+  
+  # Resource configuration (Design: 1 CPU core, 2Gi memory per pod)
+  # Resources must be specified for HPA to work properly
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  
+  # Celery worker configuration
+  celery:
+    instances: 1
+  
+  # Health checks for HPA scaling decisions
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 5
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  # HPA-related configuration
+  autoscaling:
+    enabled: false  # We use external HPA configuration
+  
+  # Pod disruption budget for scaling operations
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+
+# Flower (Celery monitoring) configuration
+flower:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Database configuration - Use existing PostgreSQL
+postgresql:
+  # Disable built-in PostgreSQL (we use external)
+  enabled: false
+
+# Redis configuration - Use existing Redis
+redis:
+  # Disable built-in Redis (we use external)
+  enabled: false
+
+# External database configuration - Using Vault secrets
+data:
+  # Use existing PostgreSQL primary service with Vault-managed credentials
+  metadataConnection:
+    userSecret: airflow-database-secret
+    userSecretKey: POSTGRES_USER
+    passwordSecret: airflow-database-secret
+    passwordSecretKey: POSTGRES_PASSWORD
+    protocol: postgresql
+    host: postgresql-primary
+    port: 5432
+    db: airflow
+    sslmode: disable
+
+# External Redis configuration - Using Vault secrets
+externalRedis:
+  # Use existing Redis service with Vault-managed credentials
+  host: redis
+  port: 6379
+  passwordSecret: airflow-redis-secret
+  passwordSecretKey: REDIS_PASSWORD
+  dbnum: 0
+
+# Persistent volumes configuration
+dags:
+  persistence:
+    # Use existing DAGs PVC from task 3
+    enabled: true
+    existingClaim: airflow-dags-pvc
+    accessMode: ReadOnlyMany
+
+logs:
+  persistence:
+    # Use existing logs PVC from task 3
+    enabled: true
+    existingClaim: airflow-logs-pvc
+    accessMode: ReadWriteMany
+
+# Service account configuration (from task 4)
+serviceAccount:
+  create: false
+  name: airflow-scheduler
+
+# Security context configuration
+securityContext:
+  runAsUser: 50000
+  runAsGroup: 0
+  fsGroup: 0
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 50000
+  runAsGroup: 0
+  fsGroup: 0
+
+# Namespace configuration
+namespace: airflow
+
+# Ingress configuration (will be configured in task 7)
+ingress:
+  enabled: false
+
+# StatsD configuration for monitoring (Task 10 - Requirements 3.1, 3.7)
+statsd:
+  enabled: true
+  host: airflow-statsd-exporter
+  port: 9125
+
+# Extra environment variables for all components
+env:
+  - name: AIRFLOW__CORE__EXECUTOR
+    value: "CeleryKubernetesExecutor"
+  - name: AIRFLOW__KUBERNETES_EXECUTOR__NAMESPACE
+    value: "airflow"
+  - name: AIRFLOW__KUBERNETES_EXECUTOR__WORKER_CONTAINER_REPOSITORY
+    value: "apache/airflow"
+  - name: AIRFLOW__KUBERNETES_EXECUTOR__WORKER_CONTAINER_TAG
+    value: "2.8.1"
+  - name: AIRFLOW__KUBERNETES_EXECUTOR__DELETE_WORKER_PODS
+    value: "True"
+
+# Extra secrets - Now managed by Vault Secrets Operator
+extraSecrets: {}
+
+# Environment variables from Vault-managed secrets
+extraEnvFrom:
+  - secretRef:
+      name: airflow-database-secret
+  - secretRef:
+      name: airflow-redis-secret
+  - secretRef:
+      name: airflow-webserver-secret
+  - secretRef:
+      name: airflow-connections-secret
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod disruption budget for high availability
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+# Network policy (will be configured in task 9)
+networkPolicies:
+  enabled: false

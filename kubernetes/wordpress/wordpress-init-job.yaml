@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wordpress-init
+  namespace: kampfzwerg
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: init-wordpress
+        image: wordpress:6.4.3-fpm
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+          echo "Initializing WordPress files..."
+          
+          # Check if WordPress is already installed
+          if [ -f /var/www/html/wp-config.php ]; then
+            echo "WordPress already initialized, skipping..."
+            exit 0
+          fi
+          
+          # Copy WordPress core files
+          echo "Copying WordPress core files..."
+          cp -av /usr/src/wordpress/. /var/www/html/
+          
+          # Set proper permissions
+          echo "Setting permissions..."
+          chown -R www-data:www-data /var/www/html/
+          find /var/www/html -type d -exec chmod 755 {} \;
+          find /var/www/html -type f -exec chmod 644 {} \;
+          
+          # Make wp-content writable
+          chmod -R 775 /var/www/html/wp-content/
+          
+          echo "WordPress files initialized successfully!"
+          ls -la /var/www/html/ | head -20
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: wordpress-mysql
+        - name: WORDPRESS_DB_USER
+          value: wordpress
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wordpress-db-credentials
+              key: db_password
+        - name: WORDPRESS_DB_NAME
+          value: wordpress
+        volumeMounts:
+        - name: wordpress-persistent-storage
+          mountPath: /var/www/html
+      volumes:
+      - name: wordpress-persistent-storage
+        persistentVolumeClaim:
+          claimName: wordpress-data
+

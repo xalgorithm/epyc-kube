@@ -1,0 +1,427 @@
+# ===================================
+# Activepieces - Open Source Automation Platform
+# Namespace: automation
+# Domain: automate2.gray-beard.com
+# ===================================
+
+---
+# ===================================
+# Namespace
+# ===================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: automation
+
+---
+# ===================================
+# Secrets
+# ===================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: activepieces-secrets
+  namespace: automation
+type: Opaque
+stringData:
+  # Generate: openssl rand -hex 16 (for AP_ENCRYPTION_KEY - must be 32 hex chars)
+  # Generate: openssl rand -base64 32 (for AP_JWT_SECRET)
+  # Generate: openssl rand -base64 24 (for POSTGRES_PASSWORD)
+  AP_ENCRYPTION_KEY: "CHANGE_ME_GENERATE_WITH_openssl_rand_hex_16"
+  AP_JWT_SECRET: "CHANGE_ME_GENERATE_WITH_openssl_rand_base64_32"
+  POSTGRES_PASSWORD: "CHANGE_ME_GENERATE_WITH_openssl_rand_base64_24"
+  POSTGRES_DB: "activepieces"
+  POSTGRES_USER: "activepieces"
+
+---
+# ===================================
+# Persistent Volume Claims
+# ===================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: automation
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-client
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: automation
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: nfs-client
+
+---
+# ===================================
+# PostgreSQL Database
+# ===================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: automation
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:14-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - activepieces
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - activepieces
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 5
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: automation
+  labels:
+    app: postgres
+spec:
+  ports:
+  - port: 5432
+    targetPort: postgres
+    name: postgres
+  selector:
+    app: postgres
+
+---
+# ===================================
+# Redis Cache/Queue
+# ===================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: automation
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        - --save
+        - "60"
+        - "1"
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          tcpSocket:
+            port: redis
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+          periodSeconds: 5
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: automation
+  labels:
+    app: redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: redis
+    name: redis
+  selector:
+    app: redis
+
+---
+# ===================================
+# Activepieces Application
+# ===================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activepieces
+  namespace: automation
+  labels:
+    app: activepieces
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: activepieces
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: activepieces
+    spec:
+      containers:
+      - name: activepieces
+        image: activepieces/activepieces:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        # Frontend URL - must be accessible externally
+        - name: AP_FRONTEND_URL
+          value: "https://automate2.gray-beard.com"
+        
+        # API URL  
+        - name: AP_API_URL
+          value: "https://automate2.gray-beard.com"
+        
+        # Webhook URL - for external webhooks
+        - name: AP_WEBHOOK_URL
+          value: "https://automate2.gray-beard.com"
+        
+        # Environment
+        - name: AP_ENVIRONMENT
+          value: "prod"
+        
+        # Execution mode
+        - name: AP_EXECUTION_MODE
+          value: "UNSANDBOXED"
+        
+        # Encryption key
+        - name: AP_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: AP_ENCRYPTION_KEY
+        
+        # JWT secret
+        - name: AP_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: AP_JWT_SECRET
+        
+        # Telemetry
+        - name: AP_TELEMETRY_ENABLED
+          value: "false"
+        
+        # Sign up enabled
+        - name: AP_SIGN_UP_ENABLED
+          value: "true"
+        
+        # PostgreSQL configuration
+        - name: AP_POSTGRES_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: POSTGRES_DB
+        - name: AP_POSTGRES_HOST
+          value: "postgres.automation.svc.cluster.local"
+        - name: AP_POSTGRES_PORT
+          value: "5432"
+        - name: AP_POSTGRES_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: POSTGRES_USER
+        - name: AP_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: activepieces-secrets
+              key: POSTGRES_PASSWORD
+        - name: AP_POSTGRES_USE_SSL
+          value: "false"
+        
+        # Redis configuration
+        - name: AP_REDIS_HOST
+          value: "redis.automation.svc.cluster.local"
+        - name: AP_REDIS_PORT
+          value: "6379"
+        - name: AP_REDIS_USE_SSL
+          value: "false"
+        
+        # Queue configuration
+        - name: AP_QUEUE_MODE
+          value: "REDIS"
+        
+        # Trigger/polling configuration
+        - name: AP_TRIGGER_DEFAULT_POLL_INTERVAL
+          value: "5"
+        
+        # Templates source
+        - name: AP_TEMPLATES_SOURCE_URL
+          value: "https://cloud.activepieces.com/api/v1/flow-templates"
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 6
+        
+        readinessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activepieces
+  namespace: automation
+  labels:
+    app: activepieces
+spec:
+  ports:
+  - port: 80
+    targetPort: 3000
+    name: http
+  selector:
+    app: activepieces
+
+---
+# ===================================
+# Ingress
+# ===================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: activepieces
+  namespace: automation
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: automate2.gray-beard.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: activepieces
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - automate2.gray-beard.com
+    secretName: activepieces-tls
+

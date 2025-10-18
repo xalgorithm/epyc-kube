@@ -1,0 +1,130 @@
+# Airflow Storage Alerting Rules
+# This file creates PrometheusRule for storage capacity and performance alerts
+# Requirements: 2.6
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: airflow-storage-alerts
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: storage-alerts
+    app.kubernetes.io/part-of: airflow
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: airflow.storage.rules
+    interval: 30s
+    rules:
+    
+    # Critical Storage Alerts
+    - alert: AirflowStorageCriticallyFull
+      expr: |
+        (
+          node_filesystem_avail_bytes{mountpoint=~"/airflow/(dags|logs|config)"} /
+          node_filesystem_size_bytes{mountpoint=~"/airflow/(dags|logs|config)"}
+        ) * 100 < 10
+      for: 5m
+      labels:
+        severity: critical
+        service: airflow
+        component: storage
+      annotations:
+        summary: "Airflow storage critically full"
+        description: "Airflow storage {{ $labels.mountpoint }} is {{ $value | humanizePercentage }} full on {{ $labels.instance }}"
+        runbook_url: "https://docs.airflow.apache.org/en/stable/administration-and-deployment/logging-monitoring/errors.html"
+
+    - alert: AirflowStorageWarning
+      expr: |
+        (
+          node_filesystem_avail_bytes{mountpoint=~"/airflow/(dags|logs|config)"} /
+          node_filesystem_size_bytes{mountpoint=~"/airflow/(dags|logs|config)"}
+        ) * 100 < 20
+      for: 10m
+      labels:
+        severity: warning
+        service: airflow
+        component: storage
+      annotations:
+        summary: "Airflow storage running low"
+        description: "Airflow storage {{ $labels.mountpoint }} is {{ $value | humanizePercentage }} full on {{ $labels.instance }}"
+        runbook_url: "https://docs.airflow.apache.org/en/stable/administration-and-deployment/logging-monitoring/errors.html"
+
+    # PVC Status Alerts
+    - alert: AirflowPVCPending
+      expr: |
+        kube_persistentvolumeclaim_status_phase{namespace="airflow", phase="Pending"} == 1
+      for: 5m
+      labels:
+        severity: warning
+        service: airflow
+        component: storage
+      annotations:
+        summary: "Airflow PVC stuck in Pending state"
+        description: "PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} has been pending for more than 5 minutes"
+
+    - alert: AirflowPVCLost
+      expr: |
+        kube_persistentvolumeclaim_status_phase{namespace="airflow", phase="Lost"} == 1
+      for: 1m
+      labels:
+        severity: critical
+        service: airflow
+        component: storage
+      annotations:
+        summary: "Airflow PVC lost"
+        description: "PVC {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is in Lost state"
+
+    # Storage Performance Alerts
+    - alert: AirflowStorageHighIOWait
+      expr: |
+        rate(node_cpu_seconds_total{mode="iowait"}[5m]) * 100 > 20
+      for: 10m
+      labels:
+        severity: warning
+        service: airflow
+        component: storage
+      annotations:
+        summary: "High I/O wait on Airflow storage"
+        description: "I/O wait is {{ $value | humanizePercentage }} on {{ $labels.instance }}, indicating storage performance issues"
+
+    - alert: AirflowStorageReadErrors
+      expr: |
+        increase(node_filesystem_device_error_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        service: airflow
+        component: storage
+      annotations:
+        summary: "Storage read errors detected"
+        description: "Storage device errors detected on {{ $labels.instance }} for device {{ $labels.device }}"
+
+    # Log Growth Rate Alerts
+    - alert: AirflowLogGrowthRateHigh
+      expr: |
+        predict_linear(node_filesystem_avail_bytes{mountpoint="/airflow/logs"}[1h], 24*3600) < 0
+      for: 30m
+      labels:
+        severity: warning
+        service: airflow
+        component: storage
+      annotations:
+        summary: "Airflow logs growing too fast"
+        description: "Airflow logs storage will be full in less than 24 hours at current growth rate on {{ $labels.instance }}"
+
+    # DAG Storage Alerts
+    - alert: AirflowDAGStorageIssue
+      expr: |
+        up{job="airflow-storage-exporter"} == 0
+      for: 5m
+      labels:
+        severity: warning
+        service: airflow
+        component: storage
+      annotations:
+        summary: "Airflow storage monitoring down"
+        description: "Airflow storage exporter is down, unable to monitor storage metrics"

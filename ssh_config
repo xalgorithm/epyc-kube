@@ -11,18 +11,13 @@ Host gimli
     User ubuntu
     IdentityFile /Users/xalg/.ssh/id_ed25519
     
-Host isildur.xalg.im
-    HostName 198.55.108.10
-    User ubuntu
-    IdentityFile /Users/xalg/.ssh/id_ed25519
-    
 Host legolas
     HostName 107.172.99.212
     User ubuntu
     IdentityFile /Users/xalg/.ssh/id_ed25519
     
 # Common options for all hosts
-Host aragorn gimli isildur.xalg.im legolas
+Host aragorn gimli legolas
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     ServerAliveInterval 60

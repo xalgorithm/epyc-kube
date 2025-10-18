@@ -1,0 +1,77 @@
+# Airflow Storage Configuration
+# This file creates the necessary storage resources for Airflow DAGs and logs
+# Requirements: 2.2, 2.3, 2.6
+
+---
+# Storage Class for Airflow (using existing NFS infrastructure)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: airflow-nfs
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: storage
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: "nfs-server.default.svc.cluster.local"  # Adjust based on your NFS server
+  share: "/airflow"
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+
+---
+# PersistentVolumeClaim for Airflow DAGs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-dags-pvc
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: dags-storage
+    app.kubernetes.io/part-of: airflow
+spec:
+  accessModes:
+    - ReadWriteMany  # Required for multiple pods to access DAGs
+  storageClassName: nfs-client  # Using existing NFS storage class
+  resources:
+    requests:
+      storage: 50Gi  # As specified in design document
+
+---
+# PersistentVolumeClaim for Airflow Logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-logs-pvc
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: logs-storage
+    app.kubernetes.io/part-of: airflow
+spec:
+  accessModes:
+    - ReadWriteMany  # Required for multiple pods to write logs
+  storageClassName: nfs-client  # Using existing NFS storage class
+  resources:
+    requests:
+      storage: 200Gi  # As specified in design document
+
+---
+# PersistentVolumeClaim for Airflow Configuration
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-config-pvc
+  namespace: airflow
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/component: config-storage
+    app.kubernetes.io/part-of: airflow
+spec:
+  accessModes:
+    - ReadWriteMany  # Required for multiple pods to access config
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 10Gi  # For configuration files and plugins

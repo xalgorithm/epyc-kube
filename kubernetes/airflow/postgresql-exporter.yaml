@@ -1,0 +1,318 @@
+# PostgreSQL Exporter Configuration for Airflow Database Metrics
+# This configuration deploys PostgreSQL exporter for database monitoring
+# Requirements: 3.1, 3.7 - Database metrics collection
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql-exporter
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: exporter
+    tier: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+      component: exporter
+  template:
+    metadata:
+      labels:
+        app: postgresql
+        component: exporter
+        tier: monitoring
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: postgresql-exporter
+        image: prometheuscommunity/postgres-exporter:v0.15.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        ports:
+        - name: metrics
+          containerPort: 9187
+          protocol: TCP
+        env:
+        - name: DATA_SOURCE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: postgresql-exporter-secret
+              key: DATA_SOURCE_NAME
+        - name: PG_EXPORTER_WEB_LISTEN_ADDRESS
+          value: "0.0.0.0:9187"
+        - name: PG_EXPORTER_WEB_TELEMETRY_PATH
+          value: "/metrics"
+        - name: PG_EXPORTER_EXTEND_QUERY_PATH
+          value: "/etc/postgres-exporter/queries.yaml"
+        - name: PG_EXPORTER_CONSTANT_LABELS
+          value: "instance=airflow-postgresql"
+        volumeMounts:
+        - name: queries
+          mountPath: /etc/postgres-exporter
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 9187
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 9187
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: queries
+        configMap:
+          name: postgresql-exporter-queries
+      - name: tmp
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-exporter
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: exporter
+    tier: monitoring
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 9187
+    targetPort: 9187
+    protocol: TCP
+  selector:
+    app: postgresql
+    component: exporter
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-exporter-secret
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: exporter
+    tier: monitoring
+type: Opaque
+stringData:
+  # Connection string for PostgreSQL exporter
+  # This should be updated with actual credentials from Vault
+  DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgresql-primary:5432/airflow?sslmode=disable"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-exporter-queries
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: exporter
+    tier: monitoring
+data:
+  queries.yaml: |
+    # Custom PostgreSQL queries for Airflow-specific metrics
+    
+    # Airflow-specific database metrics
+    airflow_dag_runs:
+      query: |
+        SELECT 
+          dag_id,
+          state,
+          COUNT(*) as count
+        FROM dag_run 
+        WHERE execution_date > NOW() - INTERVAL '24 hours'
+        GROUP BY dag_id, state
+      master: true
+      metrics:
+        - dag_id:
+            usage: "LABEL"
+            description: "DAG identifier"
+        - state:
+            usage: "LABEL"
+            description: "DAG run state"
+        - count:
+            usage: "GAUGE"
+            description: "Number of DAG runs by state in last 24 hours"
+    
+    airflow_task_instances:
+      query: |
+        SELECT 
+          dag_id,
+          task_id,
+          state,
+          COUNT(*) as count
+        FROM task_instance 
+        WHERE execution_date > NOW() - INTERVAL '24 hours'
+        GROUP BY dag_id, task_id, state
+      master: true
+      metrics:
+        - dag_id:
+            usage: "LABEL"
+            description: "DAG identifier"
+        - task_id:
+            usage: "LABEL"
+            description: "Task identifier"
+        - state:
+            usage: "LABEL"
+            description: "Task instance state"
+        - count:
+            usage: "GAUGE"
+            description: "Number of task instances by state in last 24 hours"
+    
+    airflow_task_duration:
+      query: |
+        SELECT 
+          dag_id,
+          task_id,
+          AVG(EXTRACT(EPOCH FROM (end_date - start_date))) as avg_duration_seconds,
+          MAX(EXTRACT(EPOCH FROM (end_date - start_date))) as max_duration_seconds
+        FROM task_instance 
+        WHERE execution_date > NOW() - INTERVAL '24 hours'
+          AND start_date IS NOT NULL 
+          AND end_date IS NOT NULL
+          AND state = 'success'
+        GROUP BY dag_id, task_id
+      master: true
+      metrics:
+        - dag_id:
+            usage: "LABEL"
+            description: "DAG identifier"
+        - task_id:
+            usage: "LABEL"
+            description: "Task identifier"
+        - avg_duration_seconds:
+            usage: "GAUGE"
+            description: "Average task duration in seconds over last 24 hours"
+        - max_duration_seconds:
+            usage: "GAUGE"
+            description: "Maximum task duration in seconds over last 24 hours"
+    
+    airflow_active_dags:
+      query: |
+        SELECT 
+          COUNT(*) as active_dags
+        FROM dag 
+        WHERE is_active = true AND is_paused = false
+      master: true
+      metrics:
+        - active_dags:
+            usage: "GAUGE"
+            description: "Number of active and unpaused DAGs"
+    
+    airflow_connection_pool:
+      query: |
+        SELECT 
+          'airflow' as database,
+          numbackends as active_connections,
+          numbackends::float / max_connections::float * 100 as connection_utilization_percent
+        FROM pg_stat_database 
+        JOIN (SELECT setting::int as max_connections FROM pg_settings WHERE name = 'max_connections') mc ON true
+        WHERE datname = 'airflow'
+      master: true
+      metrics:
+        - database:
+            usage: "LABEL"
+            description: "Database name"
+        - active_connections:
+            usage: "GAUGE"
+            description: "Number of active database connections"
+        - connection_utilization_percent:
+            usage: "GAUGE"
+            description: "Database connection pool utilization percentage"
+    
+    # Standard PostgreSQL metrics
+    pg_database_size:
+      query: |
+        SELECT 
+          datname as database,
+          pg_database_size(datname) as size_bytes
+        FROM pg_database 
+        WHERE datname NOT IN ('template0', 'template1', 'postgres')
+      master: true
+      metrics:
+        - database:
+            usage: "LABEL"
+            description: "Database name"
+        - size_bytes:
+            usage: "GAUGE"
+            description: "Database size in bytes"
+    
+    pg_stat_replication:
+      query: |
+        SELECT 
+          client_addr,
+          state,
+          pg_wal_lsn_diff(pg_current_wal_lsn(), flush_lsn) as replication_lag_bytes
+        FROM pg_stat_replication
+      master: true
+      metrics:
+        - client_addr:
+            usage: "LABEL"
+            description: "Standby server IP address"
+        - state:
+            usage: "LABEL"
+            description: "Replication state"
+        - replication_lag_bytes:
+            usage: "GAUGE"
+            description: "Replication lag in bytes"
+
+---
+# ServiceMonitor for PostgreSQL Exporter
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgresql-exporter
+  namespace: airflow
+  labels:
+    app: postgresql
+    component: exporter
+    tier: monitoring
+    prometheus: kube-prometheus-stack-prometheus
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: postgresql
+      component: exporter
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    honorLabels: true

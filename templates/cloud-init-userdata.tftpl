@@ -24,35 +24,39 @@ runcmd:
   - chmod 777 /mnt/nfs
 
   # Install k3s
-  # Determine if this is the init node or a joining server node
-  - |
-    %{ if is_control ~}
-    export INSTALL_K3S_EXEC="server --cluster-init --flannel-iface=eth1"
-    %{ else ~}
-    export INSTALL_K3S_EXEC="server --server https://${api_server_ip}:6443 --flannel-iface=eth1"
-    %{ endif ~}
-  # Add --node-external-ip=$PUBLIC_IP above if needed
-
+  # Create config directory for k3s
+  - mkdir -p /etc/rancher/k3s
+  
+  # Set token in environment variable and in config file
   - export K3S_TOKEN="${k3s_token}"
-  - curl -sfL https://get.k3s.io | sh -
+  - echo "K3S_TOKEN=${k3s_token}" > /etc/rancher/k3s/config.env
+
+  # Determine if this is the init node or a joining node
+  - |
+    if [ "${is_control}" = "true" ]; then
+      # Control plane setup
+      echo "K3S_KUBECONFIG_MODE=644" >> /etc/rancher/k3s/config.env
+      export INSTALL_K3S_EXEC="server --cluster-init --flannel-iface=eth1"
+      curl -sfL https://get.k3s.io | sh -
+    else
+      # Worker node setup
+      echo "K3S_URL=https://${api_server_ip}:6443" >> /etc/rancher/k3s/config.env
+      export INSTALL_K3S_EXEC="agent --flannel-iface=eth1"
+      curl -sfL https://get.k3s.io | sh -
+    fi
 
   # Wait a bit for k3s server/agent to settle
-  - sleep 20
+  - sleep 30
 
   # Create .kube directory for the default user
   - mkdir -p /home/${vm_user}/.kube
-  - cp /etc/rancher/k3s/k3s.yaml /home/${vm_user}/.kube/config
-  - chown -R ${vm_user}:${vm_user} /home/${vm_user}/.kube
-
-  # Ensure kubectl can be run by the user
-  - chmod 600 /home/${vm_user}/.kube/config
-
-  # Optional: Allow scheduling on master/control-plane nodes
   - |
-    %{ if is_control ~}
-    # kubectl taint nodes --all node-role.kubernetes.io/control-plane-
-    # kubectl taint nodes --all node-role.kubernetes.io/master-
-    %{ endif ~}
+    if [ "${is_control}" = "true" ]; then
+      cp /etc/rancher/k3s/k3s.yaml /home/${vm_user}/.kube/config
+      sed -i "s/127.0.0.1/$(hostname -I | awk '{print $1}')/g" /home/${vm_user}/.kube/config
+      chown -R ${vm_user}:${vm_user} /home/${vm_user}/.kube
+      chmod 600 /home/${vm_user}/.kube/config
+    fi
 
   # Validate that NFS support is working
   - echo "Validating NFS capabilities..."

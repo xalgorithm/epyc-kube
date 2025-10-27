@@ -25,9 +25,9 @@ mkdir -p /etc/ssl/private
 
 # Copy configuration files
 echo "Copying nginx configuration files..."
-cp nginx-reverse-proxy.conf /etc/nginx/sites-available/k8s-reverse-proxy
-cp ssl-params.conf /etc/nginx/snippets/
-cp security-headers.conf /etc/nginx/snippets/
+cp ../config/nginx/nginx-reverse-proxy.conf /etc/nginx/sites-available/k8s-reverse-proxy
+cp ../config/nginx/ssl-params.conf /etc/nginx/snippets/
+cp ../config/nginx/security-headers.conf /etc/nginx/snippets/
 
 # Create a self-signed certificate for testing (replace with real certificates later)
 if [ ! -f /etc/ssl/certs/wildcard.crt ]; then

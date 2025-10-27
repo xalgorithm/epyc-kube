@@ -53,6 +53,7 @@ variable "vm_definitions" {
   description = "Map defining the virtual machines"
   type = map(object({
     cores      = number
+    sockets    = number
     memory     = number # In MiB
     disk_size  = number # In GB
     public_ip  = string # CIDR format e.g., "10.0.1.211/24"
@@ -63,7 +64,8 @@ variable "vm_definitions" {
   default = {
     "gimli" = {
       cores          = 4
-      memory         = 8192
+      sockets        = 2
+      memory         = 16384
       disk_size      = 128
       public_ip      = "10.0.1.211/24"
       private_ip     = "192.168.100.10/24"
@@ -72,7 +74,8 @@ variable "vm_definitions" {
     }
     "legolas" = {
       cores          = 4
-      memory         = 8192
+      sockets        = 2
+      memory         = 16384
       disk_size      = 128
       public_ip      = "10.0.1.212/24"
       private_ip     = "192.168.100.11/24"
@@ -81,7 +84,8 @@ variable "vm_definitions" {
     }
     "aragorn" = {
       cores          = 4
-      memory         = 8192
+      sockets        = 2
+      memory         = 16384
       disk_size      = 128
       public_ip      = "10.0.1.213/24"
       private_ip     = "192.168.100.12/24"
@@ -130,7 +134,23 @@ variable "nfs_path" {
 variable "metallb_addresses" {
   description = "IP address ranges for MetalLB to use (list of CIDRs or /32s)"
   type        = list(string)
-  default     = ["10.0.1.214/32"]
+  default     = ["10.0.2.9-10.0.2.14"]  # Dedicated /29 subnet (6 usable IPs)
+}
+
+variable "metallb_subnet" {
+  description = "Dedicated subnet for MetalLB services"
+  type        = string
+  default     = "10.0.2.8/29"
+}
+
+variable "metallb_pool_config" {
+  description = "MetalLB pool configuration type"
+  type        = string
+  default     = "single-pool"  # Options: single-pool, service-pools, priority-pools
+  validation {
+    condition     = contains(["single-pool", "service-pools", "priority-pools"], var.metallb_pool_config)
+    error_message = "MetalLB pool config must be one of: single-pool, service-pools, priority-pools."
+  }
 }
 
 variable "grafana_admin_password" {

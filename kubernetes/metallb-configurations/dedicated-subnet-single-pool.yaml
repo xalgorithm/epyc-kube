@@ -1,0 +1,30 @@
+# MetalLB Configuration for Dedicated 10.0.2.8/29 Subnet
+# Single Pool - All 6 usable IPs in one pool for maximum flexibility
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: dedicated-subnet-pool
+  namespace: metallb-system
+  labels:
+    app: metallb
+    subnet: "198-55-108-8-29"
+    config-type: single-pool
+spec:
+  addresses:
+  - 10.0.2.9-10.0.2.14  # All 6 usable IPs
+  autoAssign: true
+  avoidBuggyIPs: false
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: dedicated-subnet-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+    subnet: "198-55-108-8-29"
+    config-type: single-pool
+spec:
+  ipAddressPools:
+  - dedicated-subnet-pool

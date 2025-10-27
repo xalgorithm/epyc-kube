@@ -1,0 +1,62 @@
+# MetalLB Multiple Pools Configuration
+# Separates web services and internal services
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: web-services-pool
+  namespace: metallb-system
+  labels:
+    app: metallb
+    config: multiple-pools
+    pool-type: web-services
+spec:
+  addresses:
+  - 10.0.1.214/32
+  - 10.0.1.215/32
+  - 10.0.1.216/32
+  autoAssign: true
+  avoidBuggyIPs: false
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: internal-services-pool
+  namespace: metallb-system
+  labels:
+    app: metallb
+    config: multiple-pools
+    pool-type: internal-services
+spec:
+  addresses:
+  - 10.0.1.217/32
+  - 10.0.1.218/32
+  - 10.0.1.219/32
+  autoAssign: false  # Manual assignment for internal services
+  avoidBuggyIPs: false
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: web-services-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+    config: multiple-pools
+    pool-type: web-services
+spec:
+  ipAddressPools:
+  - web-services-pool
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: internal-services-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+    config: multiple-pools
+    pool-type: internal-services
+spec:
+  ipAddressPools:
+  - internal-services-pool

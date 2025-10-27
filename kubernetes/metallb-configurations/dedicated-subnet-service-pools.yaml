@@ -1,0 +1,86 @@
+# MetalLB Configuration for Dedicated 10.0.2.8/29 Subnet
+# Service-Specific Pools - Separate pools for different service types
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: web-services-subnet
+  namespace: metallb-system
+  labels:
+    app: metallb
+    subnet: "198-55-108-8-29"
+    pool-type: web-services
+spec:
+  addresses:
+  - 10.0.2.9/32   # Primary web service (Traefik)
+  - 10.0.2.10/32  # Secondary web service
+  - 10.0.2.11/32  # Additional web service
+  autoAssign: true
+  avoidBuggyIPs: false
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: internal-services-subnet
+  namespace: metallb-system
+  labels:
+    app: metallb
+    subnet: "198-55-108-8-29"
+    pool-type: internal-services
+spec:
+  addresses:
+  - 10.0.2.12/32  # Internal service 1
+  - 10.0.2.13/32  # Internal service 2
+  autoAssign: false   # Manual assignment for internal services
+  avoidBuggyIPs: false
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: backup-services-subnet
+  namespace: metallb-system
+  labels:
+    app: metallb
+    subnet: "198-55-108-8-29"
+    pool-type: backup
+spec:
+  addresses:
+  - 10.0.2.14/32  # Emergency/backup IP
+  autoAssign: false   # Manual assignment only
+  avoidBuggyIPs: false
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: web-services-subnet-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+    pool-type: web-services
+spec:
+  ipAddressPools:
+  - web-services-subnet
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: internal-services-subnet-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+    pool-type: internal-services
+spec:
+  ipAddressPools:
+  - internal-services-subnet
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: backup-services-subnet-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+    pool-type: backup
+spec:
+  ipAddressPools:
+  - backup-services-subnet

@@ -137,3 +137,4 @@ echo -e "${YELLOW}Backup Info:${NC} ${LATEST_INFO:+✓ $(basename "$LATEST_INFO"
 echo ""
 echo -e "${BLUE}Total backup size: $(du -sh "$BACKUP_DIR" | cut -f1)${NC}"
 
+

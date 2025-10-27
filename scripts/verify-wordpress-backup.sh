@@ -136,3 +136,4 @@ echo -e "${YELLOW}WordPress Files:${NC} ${LATEST_TAR:+✓ $(basename "$LATEST_TA
 echo -e "${YELLOW}Backup Info:${NC} ${LATEST_INFO:+✓ $(basename "$LATEST_INFO")}${LATEST_INFO:-✗ Not found}"
 echo ""
 echo -e "${BLUE}Total backup size: $(du -sh "$BACKUP_DIR" | cut -f1)${NC}"
+

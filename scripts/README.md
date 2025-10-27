@@ -1,88 +1,126 @@
-# WordPress Kubernetes Sync Scripts
+# Scripts Directory
 
-This directory contains scripts for synchronizing WordPress files between your Kubernetes deployment and a local Git repository.
+This directory contains utility scripts for managing the Kubernetes cluster and services.
 
-## Scripts
+## 🔧 Infrastructure Scripts
 
-### `wordpress-sync.sh`
-
-This script pulls WordPress files from your Kubernetes pod to a local Git repository.
-
-**Usage:**
-```bash
-./scripts/wordpress-sync.sh
-```
-
-**What it does:**
-1. Creates a local Git repository at `./wordpress-site/` if it doesn't exist
-2. Backs up current local files before synchronizing
-3. Copies all WordPress files from the pod to the local repository
-4. Creates a sanitized wp-config-example.php (with sensitive information removed)
-5. Commits all changes to the Git repository
-
-### `wordpress-deploy.sh`
-
-This script pushes WordPress files from your local Git repository back to the Kubernetes pod.
+### `setup-reverse-proxy.sh`
+Sets up nginx reverse proxy on the control plane node to handle incoming traffic on standard ports (80/443).
 
 **Usage:**
 ```bash
-./scripts/wordpress-deploy.sh
+./setup-reverse-proxy.sh
 ```
 
 **What it does:**
-1. Creates a backup of the current WordPress files in the pod
-2. Optionally downloads the backup locally
-3. Deploys files from the local repository to the pod
-4. Preserves the existing wp-config.php if it's not in the local repo
-5. Fixes permissions on the deployed files
+- Installs nginx
+- Configures reverse proxy to forward to Kubernetes NodePorts
+- Sets up SSL with self-signed certificates
+- Configures security headers
 
-## Workflow for WordPress Development
+### `setup-letsencrypt.sh`
+Configures Let's Encrypt SSL certificates for all domains.
 
-1. **Initial Setup:**
-   ```bash
-   # Initialize the local repository with current WordPress files
-   ./scripts/wordpress-sync.sh
-   
-   # Create a GitHub repository for your WordPress files
-   # Then push your local repository to GitHub
-   cd wordpress-site
-   git remote add origin https://github.com/yourusername/your-wordpress-repo.git
-   git push -u origin main
-   ```
+**Usage:**
+```bash
+./setup-letsencrypt.sh
+```
 
-2. **Development Workflow:**
-   ```bash
-   # Pull the latest changes from the pod
-   ./scripts/wordpress-sync.sh
-   
-   # Make and test changes locally
-   # ...
-   
-   # Commit your changes
-   cd wordpress-site
-   git add .
-   git commit -m "Description of changes"
-   
-   # Push to GitHub
-   git push origin main
-   
-   # Deploy changes to the pod
-   cd ..
-   ./scripts/wordpress-deploy.sh
-   ```
+**Prerequisites:**
+- DNS must be pointing to the server
+- Reverse proxy must be set up first
 
-3. **Automation (Optional):**
-   ```bash
-   # Add a cron job to automatically sync WordPress files daily
-   crontab -e
-   
-   # Add this line to run sync daily at 2 AM
-   0 2 * * * cd /path/to/epyc2 && ./scripts/wordpress-sync.sh >> /path/to/log/wordpress-sync.log 2>&1
-   ```
+## 🔍 Diagnostic Scripts
 
-## Notes
+### `test-all-domains.sh`
+Comprehensive connectivity test for all configured domains.
 
-- These scripts assume that you have `kubectl` configured with access to your Kubernetes cluster
-- The WordPress pod must be running and accessible
-- The WordPress deployment must be in the `wordpress` namespace
-- The pod must have a label `app=wordpress` to be found by the scripts 
+**Usage:**
+```bash
+./test-all-domains.sh
+```
+
+**Tests:**
+- DNS resolution
+- HTTP to HTTPS redirect
+- HTTPS response codes
+- SSL certificate validation
+
+### `check-services.sh`
+Health check script for all Kubernetes services.
+
+**Usage:**
+```bash
+./check-services.sh
+```
+
+**Checks:**
+- Service HTTP responses
+- Kubernetes NodePort connectivity
+- Nginx status and logs
+
+### `fix-nfs-connectivity.sh`
+Diagnoses NFS connectivity issues between Kubernetes nodes and NFS server.
+
+**Usage:**
+```bash
+./fix-nfs-connectivity.sh
+```
+
+**Tests:**
+- Network connectivity to NFS server
+- NFS port accessibility
+- Mount capability testing
+
+## 🗑️ Cleanup Scripts
+
+### `remove-airflow.sh`
+Completely removes Airflow and all its dependencies from the cluster.
+
+**Usage:**
+```bash
+./remove-airflow.sh
+```
+
+**⚠️ Warning:** This permanently deletes all Airflow data and cannot be undone.
+
+### `migrate-to-local-storage.sh`
+Migrates services from NFS storage to local storage.
+
+**Usage:**
+```bash
+./migrate-to-local-storage.sh
+```
+
+**⚠️ Warning:** This will lose all existing data stored on NFS.
+
+## 📋 Usage Notes
+
+### Making Scripts Executable
+```bash
+chmod +x scripts/*.sh
+```
+
+### Running from Root Directory
+```bash
+# From the project root
+./scripts/test-all-domains.sh
+```
+
+### SSH Configuration
+Most scripts expect an SSH config file in the project root for accessing Kubernetes nodes.
+
+## 🔐 Security Considerations
+
+- Scripts that modify infrastructure should be reviewed before execution
+- Always test in a non-production environment first
+- Scripts with data deletion warnings require careful consideration
+- Ensure proper backup procedures before running destructive operations
+
+## 📝 Script Dependencies
+
+- `kubectl` with valid kubeconfig
+- SSH access to Kubernetes nodes
+- `curl` for connectivity testing
+- `openssl` for SSL testing
+- `helm` for some operations

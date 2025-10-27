@@ -4,58 +4,67 @@ This project sets up a Kubernetes cluster on Proxmox VMs and deploys a complete 
 
 ## Project Structure
 
-The project is organized with proper Terraform modules:
+The project is organized with proper Terraform modules and clean directory structure:
 
 ```
 .
 ├── modules/                       # Terraform modules
 │   ├── proxmox/                   # Proxmox VM provisioning
-│   │   ├── main.tf                # VM creation logic
-│   │   ├── variables/             # Module input variables
-│   │   ├── outputs/               # Module outputs
-│   │   └── snippets/              # Helper code snippets
 │   ├── kubernetes/                # Kubernetes infrastructure
-│   │   ├── main.tf                # K8s resources (MetalLB, NFS)
-│   │   ├── variables/             # Module input variables
-│   │   └── outputs/               # Module outputs
 │   ├── monitoring/                # Observability stack
-│   │   ├── main.tf                # Monitoring components
-│   │   ├── variables/             # Module input variables
-│   │   ├── outputs/               # Module outputs
-│   │   └── templates/             # Configuration templates
 │   ├── cert-manager/              # Certificate management
-│   │   ├── templates/             # Configuration templates
-│   │   └── variables/             # Module input variables
 │   └── ingress/                   # Ingress controllers
-├── kubernetes/                    # Kubernetes manifests
-│   ├── alertmanager-config.yaml   # Alertmanager email notifications
-│   ├── apply-alertmanager-config.sh # Script to apply alerting config
-│   ├── grafana/                   # Grafana-related manifests
-│   │   └── grafana-ingress-tls.yaml # TLS-enabled ingress
-│   ├── k3s-cleanup-servicemonitors.sh # Fix k3s monitoring
-│   ├── n8n/                       # n8n automation platform manifests
-│   │   ├── deployment.yaml        # n8n deployment configuration
-│   │   └── ingress-tls.yaml       # TLS-enabled ingress for n8n
-│   ├── obsidian/                  # Obsidian sync manifests
-│   │   ├── couchdb-deployment.yaml # CouchDB for Obsidian sync
-│   │   └── obsidian-deployment.yaml # Obsidian server
-│   ├── prometheus-rule-suppress.yaml # Alert suppression rules
-│   ├── README-monitoring.md       # Monitoring documentation
-│   └── traefik/                   # Traefik ingress controller manifests
-│       ├── current-traefik.yaml   # Current Traefik configuration
-│       └── traefik-deployment-acme.yaml # ACME/Let's Encrypt enabled
+├── scripts/                       # Management and utility scripts
+│   ├── setup-reverse-proxy.sh     # Nginx reverse proxy setup
+│   ├── setup-letsencrypt.sh       # SSL certificate automation
+│   ├── test-all-domains.sh        # Connectivity testing
+│   ├── check-services.sh          # Health monitoring
+│   ├── fix-nfs-connectivity.sh    # NFS diagnostics
+│   ├── remove-airflow.sh          # Service cleanup
+│   └── README.md                  # Scripts documentation
+├── docs/                          # Documentation
+│   ├── REVERSE-PROXY-SETUP.md     # Complete proxy setup guide
+│   └── README.md                  # Documentation index
 ├── config/                        # Configuration files
-│   └── k3s/                       # k3s config files
-├── templates/                     # General templates
-├── snippets/                      # Helper code snippets
+│   ├── nginx/                     # Nginx configurations
+│   │   ├── nginx-reverse-proxy.conf
+│   │   ├── ssl-params.conf
+│   │   └── security-headers.conf
+│   └── README.md                  # Configuration documentation
+├── kubernetes/                    # Kubernetes manifests
+│   ├── metallb-fix.yaml           # MetalLB configuration
+│   ├── nfs-provisioner.yaml       # NFS storage provisioner
+│   ├── traefik-service.yaml       # Traefik service configuration
+│   └── [application manifests]    # Various service deployments
+├── templates/                     # Terraform templates
+│   ├── cloud-init-userdata.tftpl  # VM initialization template
+│   └── ssh_config.tftpl           # SSH configuration template
 ├── main.tf                        # Root Terraform configuration
 ├── variables.tf                   # Root variables
 ├── outputs.tf                     # Root outputs
 ├── terraform.tfvars               # Variable values (not in git)
-├── nok8s.tfvars                   # Infrastructure-only variables
 ├── kubeconfig.yaml                # Kubernetes configuration
-└── cloud-init-userdata.tftpl      # Template for cloud-init configuration
+└── README.md                      # This file
 ```
+
+## Quick Start
+
+### 🚀 Infrastructure Setup
+```bash
+# 1. Set up reverse proxy (run on control plane node)
+./scripts/setup-reverse-proxy.sh
+
+# 2. Test all services
+./scripts/test-all-domains.sh
+
+# 3. Get SSL certificates (optional)
+./scripts/setup-letsencrypt.sh
+```
+
+### 📚 Documentation
+- **Complete Setup Guide**: [`docs/REVERSE-PROXY-SETUP.md`](docs/REVERSE-PROXY-SETUP.md)
+- **Scripts Reference**: [`scripts/README.md`](scripts/README.md)
+- **Configuration Guide**: [`config/README.md`](config/README.md)
 
 ## Prerequisites
 

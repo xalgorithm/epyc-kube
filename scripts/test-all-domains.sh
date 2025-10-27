@@ -16,7 +16,6 @@ echo "=================================================="
 # List of all domains
 DOMAINS=(
     "grafana.gray-beard.com"
-    "airflow.gray-beard.com"
     "automate.gray-beard.com"
     "automate2.gray-beard.com"
     "ethos.gray-beard.com"

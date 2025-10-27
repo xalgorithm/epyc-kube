@@ -103,3 +103,4 @@ terraform.tfstate.*.backup
 *.rar
 *.bz2
 *.xz
+kubernetes/ethosenv

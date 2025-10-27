@@ -1,0 +1,28 @@
+# MetalLB IP Range Configuration
+# Provides multiple IPs for redundancy and growth
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: metallb-system
+  labels:
+    app: metallb
+    config: ip-range
+spec:
+  addresses:
+  - 10.0.1.214-10.0.1.220  # Range of 7 IPs
+  autoAssign: true
+  avoidBuggyIPs: false
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: default-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+    config: ip-range
+spec:
+  ipAddressPools:
+  - default-pool

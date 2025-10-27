@@ -1,0 +1,93 @@
+EthosEnv Backup Manifest
+========================
+Date: Sat Oct 18 15:58:26 PDT 2025
+Namespace: ethosenv
+Timestamp: 20251018_155729
+
+Database Information:
+- Database Name: wordpress
+- Database User: wordpress
+- MySQL Pod: mysql-5c896dd94c-x8z6z
+
+WordPress Information:
+- WordPress Pod: wordpress-85d6f7bfc4-4bhgw
+- WordPress Path: /var/www/html
+
+Backup Files:
+- Database: ethosenv_database_20251018_155729.sql
+- WordPress Files: ethosenv_wordpress_20251018_155729.tar.gz
+
+Kubernetes Resources:
+NAME                             READY   STATUS    RESTARTS      AGE
+pod/cm-acme-http-solver-cldq6    1/1     Running   0             34d
+pod/mysql-5c896dd94c-x8z6z       1/1     Running   1 (34d ago)   34d
+pod/wordpress-85d6f7bfc4-4bhgw   1/1     Running   2 (28d ago)   28d
+
+NAME                                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+service/cm-acme-http-solver-7lm7z   NodePort    10.43.30.34     <none>        8089:32744/TCP   34d
+service/mysql                       ClusterIP   10.43.140.127   <none>        3306/TCP         34d
+service/wordpress                   ClusterIP   10.43.108.128   <none>        80/TCP           34d
+
+NAME                        READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mysql       1/1     1            1           34d
+deployment.apps/wordpress   1/1     1            1           34d
+
+NAME                                   DESIRED   CURRENT   READY   AGE
+replicaset.apps/mysql-5c896dd94c       1         1         1       34d
+replicaset.apps/wordpress-55bb4f9cd9   0         0         0       34d
+replicaset.apps/wordpress-66f85bf854   0         0         0       33d
+replicaset.apps/wordpress-6bf7bc75     0         0         0       33d
+replicaset.apps/wordpress-7468d9b54    0         0         0       34d
+replicaset.apps/wordpress-85d6f7bfc4   1         1         1       28d
+replicaset.apps/wordpress-85f44fccfc   0         0         0       34d
+replicaset.apps/wordpress-c8fb658c9    0         0         0       28d
+
+Persistent Volumes:
+NAME            STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+mysql-pvc       Bound    pvc-5c965383-86a6-4f78-aa38-ff3ede4d24f0   10Gi       RWO            nfs-client     <unset>                 34d
+wordpress-pvc   Bound    pvc-4b513596-acbe-4594-a8c6-243dd908dfef   5Gi        RWO            nfs-client     <unset>                 34d
+
+Pod Details:
+WordPress Pod:
+Name:             wordpress-85d6f7bfc4-4bhgw
+Namespace:        ethosenv
+Priority:         0
+Service Account:  default
+Node:             aragorn/10.0.1.213
+Start Time:       Sat, 20 Sep 2025 15:45:57 -0700
+Labels:           app=wordpress
+                  pod-template-hash=85d6f7bfc4
+Annotations:      kubectl.kubernetes.io/restartedAt: 2025-09-15T12:15:41-07:00
+Status:           Running
+IP:               10.42.2.204
+IPs:
+  IP:           10.42.2.204
+Controlled By:  ReplicaSet/wordpress-85d6f7bfc4
+Init Containers:
+  copy-wordpress-files:
+    Container ID:  containerd://4a039c852bd7a0e0d1e4614bf740803e0c1f48ea95ec0c32958743e2e93f4ad4
+    Image:         wordpress:latest
+    Image ID:      docker.io/library/wordpress@sha256:4a56bc8e6a0c2ab039888a0d6b5528c4372753ae9af4110f733fce84a8773eb0
+    Port:          <none>
+
+MySQL Pod:
+Name:             mysql-5c896dd94c-x8z6z
+Namespace:        ethosenv
+Priority:         0
+Service Account:  default
+Node:             legolas/10.0.1.212
+Start Time:       Sun, 14 Sep 2025 13:47:16 -0700
+Labels:           app=mysql
+                  pod-template-hash=5c896dd94c
+Annotations:      <none>
+Status:           Running
+IP:               10.42.1.208
+IPs:
+  IP:           10.42.1.208
+Controlled By:  ReplicaSet/mysql-5c896dd94c
+Containers:
+  mysql:
+    Container ID:   containerd://500ab5ce83805cc6778f27a60f2f2afd12e6c4d8d97b92d4e9e307e01b07d433
+    Image:          mysql:8.0
+    Image ID:       docker.io/library/mysql@sha256:51d7ec709cde798d2b5cb3f402a4873166be70302214a85ab55be2188d6728fc
+    Port:           3306/TCP (mysql)

@@ -1,0 +1,22 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: local-subnet-pool
+  namespace: metallb-system
+  labels:
+    app: metallb
+spec:
+  addresses:
+  - 10.0.1.215-10.0.1.220
+  autoAssign: true
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: local-subnet-l2
+  namespace: metallb-system
+  labels:
+    app: metallb
+spec:
+  ipAddressPools:
+  - local-subnet-pool

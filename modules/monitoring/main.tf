@@ -74,9 +74,64 @@ prometheus:
         cpu: 1000m
     remoteWrite:
       - url: http://mimir-nginx.monitoring.svc.cluster.local/api/v1/push
+
+kubeEtcd:
+  enabled: true
+  service:
+    enabled: false # We will manage this manually for k3s
+  serviceMonitor:
+    scheme: http # k3s uses http by default for etcd metrics unless configured otherwise
 EOF
   ]
 }
+
+# Manual etcd service for K3s (as it doesn't run etcd as pod)
+resource "kubernetes_service" "k3s_etcd" {
+  count = var.deploy_monitoring ? 1 : 0
+  
+  metadata {
+    name      = "kube-prometheus-stack-kube-etcd-manual"
+    namespace = "kube-system"
+    labels = {
+      app     = "kube-prometheus-stack-kube-etcd"
+      release = "kube-prometheus-stack"
+    }
+  }
+
+  spec {
+    port {
+      name        = "http-metrics"
+      port        = 2381
+      target_port = 2381
+      protocol    = "TCP"
+    }
+    type = "ClusterIP"
+  }
+}
+
+resource "kubernetes_endpoints" "k3s_etcd" {
+  count = var.deploy_monitoring ? 1 : 0
+
+  metadata {
+    name      = "kube-prometheus-stack-kube-etcd-manual"
+    namespace = "kube-system"
+    labels = {
+      app     = "kube-prometheus-stack-kube-etcd"
+      release = "kube-prometheus-stack"
+    }
+  }
+
+  subset {
+    address {
+      ip = "192.168.100.10" # gimli private IP
+    }
+    port {
+      name = "http-metrics"
+      port = 2381
+    }
+  }
+}
+
 
 # Loki Stack for Log Collection
 resource "helm_release" "loki" {
@@ -198,7 +253,7 @@ EOF
   ]
 }
 
-# Mimir for Scalable Metrics Storage (simplified for small clusters)
+# Mimir for Scalable Metrics Storage
 resource "helm_release" "mimir" {
   count = var.deploy_monitoring ? 1 : 0
   
@@ -214,64 +269,82 @@ resource "helm_release" "mimir" {
   timeout = 900 # 15 minutes
 
   values = [<<EOF
-# Simplified deployment for small clusters
+# Fixed configuration for the cluster environment
 nginx:
+  enabled: true
   service:
     type: ClusterIP
+  configOverride: |
+    worker_processes  5;
+    error_log  /dev/stderr error;
+    pid        /tmp/nginx.pid;
+    worker_rlimit_nofile 8192;
+    events {
+      worker_connections  4096;
+    }
+    http {
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path       /tmp/proxy_temp_path;
+      fastcgi_temp_path     /tmp/fastcgi_temp;
+      uwsgi_temp_path       /tmp/uwsgi_temp;
+      scgi_temp_path        /tmp/scgi_temp;
+      default_type application/octet-stream;
+      access_log   /dev/stderr;
+      sendfile     on;
+      tcp_nopush   on;
+      resolver 10.43.0.10;
+      map $http_x_scope_orgid $ensured_x_scope_orgid {
+        default $http_x_scope_orgid;
+        "" "anonymous";
+      }
+      server {
+        listen 8080;
+        location = / { return 200 'OK'; }
+        proxy_set_header X-Scope-OrgID $ensured_x_scope_orgid;
+        location /distributor {
+          set $distributor mimir-distributor-headless.monitoring.svc.cluster.local;
+          proxy_pass http://$distributor:8080$request_uri;
+        }
+        location = /api/v1/push {
+          set $distributor mimir-distributor-headless.monitoring.svc.cluster.local;
+          proxy_pass http://$distributor:8080$request_uri;
+        }
+        location /prometheus {
+          set $query_frontend mimir-query-frontend.monitoring.svc.cluster.local;
+          proxy_pass http://$query_frontend:8080$request_uri;
+        }
+      }
+    }
 
 global:
   dnsService: "kube-dns"
   storageClassName: "nfs-client"
 
-resources:
-  small:
-    limits:
-      cpu: 1
-      memory: 1Gi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-
 mimir:
-  singleBinary:
-    enabled: true  # Use single binary mode for simplicity
-    replicas: 1
-    resources:
-      limits:
-        cpu: 1
-        memory: 2Gi
-      requests:
-        cpu: 200m
-        memory: 512Mi
-  
-  # Disable complex components for simplicity
-  alertmanager:
-    enabled: false
-  compactor:
-    enabled: false
-  distributor:
-    enabled: false
-  ingester:
-    enabled: false
-  querier:
-    enabled: false
-  query_frontend:
-    enabled: false
-  ruler:
-    enabled: false
-  store_gateway:
-    enabled: false
+  structuredConfig:
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: minio.monitoring:9000
+          bucket_name: mimir
+          access_key_id: mimir
+          secret_access_key: mimir
+          insecure: true
+    config_file: /etc/mimir/mimir.yaml
 
-# Use minimal persisted storage
-metaMonitoring:
-  serviceMonitor:
-    enabled: false
-  grafanaAgent:
-    enabled: false
-  dashboards:
-    enabled: false
-  rules:
-    enabled: false
+# Re-enabling components to match the current Distributed deployment
+mimir_distributed:
+  enabled: true
+
+ingester:
+  replicas: 3
+  zoneAwareness:
+    enabled: true
+querier:
+  replicas: 2
+query_frontend:
+  replicas: 1
 EOF
   ]
 } 

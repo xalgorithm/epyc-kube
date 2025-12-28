@@ -1,5 +1,7 @@
 # Secure Network Bridge: Colocation to Home Network
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Network Checklist](network-bridge-checklist.md) | [OPNsense Setup](opnsense-wireguard-setup.md)
+
 ## Overview
 
 This document outlines the implementation of a secure network bridge between:
@@ -7,6 +9,12 @@ This document outlines the implementation of a secure network bridge between:
 - Home network: `192.168.100.0/24` 
 
 The solution uses WireGuard (implemented in OPNsense) as the primary VPN technology with a fallback to Tailscale for redundancy.
+
+**Related Documentation:**
+- [Network Bridge Deployment Checklist](network-bridge-checklist.md) - Step-by-step deployment guide
+- [OPNsense WireGuard Setup](opnsense-wireguard-setup.md) - Detailed OPNsense configuration
+- [Setup Script](../scripts/setup-colo-wireguard.sh) - Automated colocation setup
+- [Proxmox Network Configuration](proxmox-metallb-subnet-configuration.md) - MetalLB subnet setup
 
 ## Network Diagram
 

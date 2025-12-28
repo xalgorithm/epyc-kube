@@ -1,6 +1,13 @@
 # Activepieces on Kubernetes
 
+> 📚 **Navigation:** [Main README](../../README.md) | [Documentation Index](../../docs/README.md) | [n8n](../n8n/)
+
 Activepieces is an open-source automation platform (alternative to Zapier/Make.com) deployed in the `automation` namespace.
+
+**Related Documentation:**
+- [Main README](../../README.md) - Platform overview
+- [n8n Automation](../n8n/) - Alternative workflow platform
+- [Keycloak SSO](../keycloak/README.md) - Authentication setup
 
 ## Quick Reference
 

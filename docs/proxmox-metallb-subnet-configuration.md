@@ -1,8 +1,16 @@
 # Proxmox Network Configuration for MetalLB Subnet
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Traefik Connectivity Fix](traefik-external-connectivity-fix.md)
+
 ## Overview
 
 The `10.0.2.8/29` subnet needs to be properly configured in Proxmox to ensure MetalLB can announce and route traffic to the LoadBalancer IPs.
+
+**Related Documentation:**
+- [Traefik External Connectivity Fix](traefik-external-connectivity-fix.md) - Troubleshooting LoadBalancer access
+- [MetalLB Configurations](../kubernetes/metallb-configurations/) - Kubernetes MetalLB resources
+- [Configuration Scripts](../scripts/) - Network configuration automation
+- [Main README](../README.md) - Network architecture overview
 
 ## Current Configuration Analysis
 

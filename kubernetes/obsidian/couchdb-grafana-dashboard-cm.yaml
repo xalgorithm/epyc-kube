@@ -114,7 +114,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "rate(couchdb_httpd_request_count[5m])",
+              "expr": "rate(couchdb_httpd_requests[5m])",
               "refId": "A"
             }
           ],
@@ -203,7 +203,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "couchdb_database_operations",
+              "expr": "couchdb_httpd_database_reads + couchdb_httpd_database_writes",
               "refId": "A"
             }
           ],
@@ -263,7 +263,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "couchdb_database_disk_size_bytes",
+              "expr": "couchdb_httpd_databases_total",
               "refId": "A"
             }
           ],

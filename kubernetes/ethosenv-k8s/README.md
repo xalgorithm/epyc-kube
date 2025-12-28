@@ -1,6 +1,14 @@
 # WordPress on Kubernetes (ethosenv)
 
+> 📚 **Navigation:** [Main README](../../README.md) | [Documentation Index](../../docs/README.md) | [Backup System](../../backups/README.md) | [WordPress Chart](../../charts/wordpress-site/)
+
 This directory contains the Kubernetes manifests and scripts to deploy WordPress in the `ethosenv` namespace with comprehensive migration and fix capabilities.
+
+**Related Documentation:**
+- [Main README](../../README.md) - Platform overview
+- [Backup System](../../backups/README.md) - WordPress backup documentation
+- [WordPress Helm Chart](../../charts/wordpress-site/) - Helm deployment alternative
+- [Kampfzwerg WordPress](../wordpress/) - Alternative WordPress deployment
 
 ## 🚀 Quick Start
 

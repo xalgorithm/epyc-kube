@@ -1,6 +1,13 @@
 # Obsidian Stack SSL Certificate Management
 
+> 📚 **Navigation:** [Main README](../../README.md) | [Documentation Index](../../docs/README.md) | [Cert-Manager Module](../../modules/cert-manager/)
+
 This document provides comprehensive guidance for managing SSL certificates in the Obsidian stack using cert-manager and Let's Encrypt.
+
+**Related Documentation:**
+- [Main README](../../README.md) - Platform overview
+- [Cert-Manager Module](../../modules/cert-manager/) - Certificate automation
+- [Reverse Proxy Setup](../../docs/REVERSE-PROXY-SETUP.md) - Nginx proxy configuration
 
 ## Overview
 

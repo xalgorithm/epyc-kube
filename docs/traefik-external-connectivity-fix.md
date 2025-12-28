@@ -1,5 +1,7 @@
 # Traefik External Connectivity Fix
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Proxmox MetalLB Config](proxmox-metallb-subnet-configuration.md)
+
 ## Problem Summary
 
 External HTTP/HTTPS connectivity to Traefik (via MetalLB LoadBalancer IP 10.0.2.9) is timing out, even though:
@@ -8,6 +10,12 @@ External HTTP/HTTPS connectivity to Traefik (via MetalLB LoadBalancer IP 10.0.2.
 - ✅ Internal connectivity (from within the cluster) works
 - ✅ External ICMP/ping works
 - ❌ External HTTP/HTTPS times out
+
+**Related Documentation:**
+- [Proxmox Network Configuration](proxmox-metallb-subnet-configuration.md) - MetalLB subnet setup
+- [Fix Script](../scripts/fix-external-traefik-connectivity.sh) - Automated firewall rule application
+- [MetalLB Configurations](../kubernetes/metallb-configurations/) - Kubernetes resources
+- [Reverse Proxy Setup](REVERSE-PROXY-SETUP.md) - Nginx proxy configuration
 
 ## Root Cause
 

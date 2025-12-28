@@ -53,6 +53,7 @@ spec:
         - --providers.kubernetesingress
         - --providers.kubernetesingress.allowEmptyServices=true
         - --providers.kubernetesingress.ingressendpoint.publishedservice=kube-system/traefik
+        - --providers.kubernetesingress.ingressendpoint.ip=10.0.1.211
         - --entryPoints.websecure.http.tls=true
         - --certificatesresolvers.letsencrypt.acme.email=admin@example.com
         - --certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json

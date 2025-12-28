@@ -151,26 +151,118 @@ backup_database() {
     fi
 }
 
+# SSH config file location (relative to script directory)
+SSH_CONFIG="./ssh_config"
+
+# Function to copy file from pod using SSH (primary for large files)
+copy_from_pod_with_fallback() {
+    local pod_path="$1"
+    local local_path="$2"
+    local container="$3"
+    
+    # Get the node where the pod is running
+    local node_name=$(kubectl get pod "$WORDPRESS_POD" -n "$NAMESPACE" -o jsonpath='{.spec.nodeName}' 2>/dev/null)
+    
+    # Try SSH/SCP first (more reliable for large files over NFS)
+    if [ -n "$node_name" ] && [ -f "$SSH_CONFIG" ]; then
+        echo -e "${BLUE}Using SSH/SCP method (more reliable for large files)...${NC}"
+        echo -e "${BLUE}Pod is running on node: $node_name${NC}"
+        
+        # Find the NFS mount path on the node
+        local nfs_mount=$(ssh -F "$SSH_CONFIG" "$node_name" "mount | grep '$NAMESPACE.*wordpress' | head -1 | awk '{print \$3}'" 2>/dev/null)
+        if [ -z "$nfs_mount" ]; then
+            nfs_mount=$(ssh -F "$SSH_CONFIG" "$node_name" "mount | grep 'kampfzwerg.*wordpress' | head -1 | awk '{print \$3}'" 2>/dev/null)
+        fi
+        
+        if [ -n "$nfs_mount" ]; then
+            echo -e "${BLUE}Found NFS mount at: $nfs_mount${NC}"
+            
+            # Create archive on the node and copy via SCP
+            local remote_temp="/tmp/wp_backup_$TIMESTAMP.tar.gz"
+            echo -e "${BLUE}Creating archive on node...${NC}"
+            if ssh -F "$SSH_CONFIG" "$node_name" "sudo tar -czf $remote_temp -C '$nfs_mount' . 2>/dev/null"; then
+                echo -e "${BLUE}Copying archive via SCP...${NC}"
+                if scp -F "$SSH_CONFIG" "$node_name:$remote_temp" "$local_path" 2>/dev/null; then
+                    # Cleanup remote temp file
+                    ssh -F "$SSH_CONFIG" "$node_name" "sudo rm -f $remote_temp" 2>/dev/null || true
+                    
+                    # Verify the archive
+                    if [ -s "$local_path" ] && tar -tzf "$local_path" >/dev/null 2>&1; then
+                        echo -e "${GREEN}✓ SSH/SCP method succeeded${NC}"
+                        return 0
+                    fi
+                fi
+                ssh -F "$SSH_CONFIG" "$node_name" "sudo rm -f $remote_temp" 2>/dev/null || true
+            fi
+        fi
+        echo -e "${YELLOW}SSH/SCP method failed, falling back to kubectl cp...${NC}"
+    fi
+    
+    # Fallback to kubectl cp
+    echo -e "${BLUE}Attempting kubectl cp...${NC}"
+    kubectl cp "$NAMESPACE/$WORDPRESS_POD:$pod_path" "$local_path" -c "$container" 2>&1 || true
+    
+    # Check if file was copied and is valid
+    if [ -s "$local_path" ] && tar -tzf "$local_path" >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ kubectl cp succeeded${NC}"
+        return 0
+    fi
+    
+    echo -e "${RED}✗ All copy methods failed${NC}"
+    return 1
+}
+
 # Function to backup WordPress files
 backup_wordpress_files() {
     echo -e "${YELLOW}Creating WordPress files backup...${NC}"
     
     local backup_file="$BACKUP_DIR/wordpress_files_$TIMESTAMP.tar.gz"
+    local temp_archive="/tmp/wordpress_backup_$TIMESTAMP.tar.gz"
+    
+    # Determine the container name (kampfzwerg uses php-fpm)
+    local container_name="php-fpm"
     
     # Check WordPress directory
     echo -e "${BLUE}Checking WordPress directory...${NC}"
-    if ! kubectl exec -n $NAMESPACE $WORDPRESS_POD -- test -d /var/www/html; then
+    if ! kubectl exec -n $NAMESPACE $WORDPRESS_POD -c $container_name -- test -d /var/www/html; then
         echo -e "${RED}✗ WordPress directory /var/www/html not found${NC}"
         return 1
     fi
     
+    # Show directory size
+    echo -e "${BLUE}WordPress directory size:${NC}"
+    kubectl exec -n $NAMESPACE $WORDPRESS_POD -c $container_name -- du -sh /var/www/html 2>/dev/null || echo "Unable to determine size"
+    
     # Show directory contents
     echo -e "${BLUE}WordPress directory contents:${NC}"
-    kubectl exec -n $NAMESPACE $WORDPRESS_POD -- ls -la /var/www/html | head -10
+    kubectl exec -n $NAMESPACE $WORDPRESS_POD -c $container_name -- ls -la /var/www/html | head -10
     
-    # Create tar.gz archive of WordPress files
-    echo -e "${BLUE}Creating archive...${NC}"
-    kubectl exec -n $NAMESPACE $WORDPRESS_POD -- tar -czf - -C /var/www/html . > "$backup_file"
+    # Create tar.gz archive INSIDE the pod first (faster than streaming)
+    echo -e "${BLUE}Creating archive inside pod (this may take a few minutes for large sites)...${NC}"
+    if ! kubectl exec -n $NAMESPACE $WORDPRESS_POD -c $container_name -- tar -czf "$temp_archive" -C /var/www/html . 2>&1; then
+        echo -e "${RED}✗ Failed to create archive inside pod${NC}"
+        return 1
+    fi
+    
+    # Check archive was created
+    echo -e "${BLUE}Verifying archive in pod...${NC}"
+    local pod_archive_size=$(kubectl exec -n $NAMESPACE $WORDPRESS_POD -c $container_name -- du -h "$temp_archive" 2>/dev/null | cut -f1)
+    if [ -z "$pod_archive_size" ]; then
+        echo -e "${RED}✗ Archive not found in pod${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Archive created in pod: $pod_archive_size${NC}"
+    
+    # Copy archive from pod to local with SSH fallback
+    echo -e "${BLUE}Copying archive from pod to local...${NC}"
+    if ! copy_from_pod_with_fallback "$temp_archive" "$backup_file" "$container_name"; then
+        # Cleanup temp file in pod
+        kubectl exec -n $NAMESPACE $WORDPRESS_POD -c $container_name -- rm -f "$temp_archive" 2>/dev/null || true
+        return 1
+    fi
+    
+    # Cleanup temp file in pod
+    kubectl exec -n $NAMESPACE $WORDPRESS_POD -c $container_name -- rm -f "$temp_archive" 2>/dev/null || true
     
     if [ -s "$backup_file" ]; then
         echo -e "${GREEN}✓ WordPress files backup created: $backup_file${NC}"

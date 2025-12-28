@@ -104,3 +104,10 @@ terraform.tfstate.*.backup
 *.bz2
 *.xz
 kubernetes/ethosenv
+kubernetes/nozyu
+wordpress-site/
+
+values.yaml
+
+couchdb_metrics.txt
+kubernetes/ethosenv/

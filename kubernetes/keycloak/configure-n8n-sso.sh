@@ -11,9 +11,9 @@ NC="\033[0m" # No Color
 echo -e "${BLUE}Configuring n8n with Keycloak SSO${NC}"
 
 # Configuration variables
-KEYCLOAK_URL="https://login.gray-beard.com"
-KEYCLOAK_REALM="xalg-apps"
-N8N_URL="https://automate.gray-beard.com"
+KEYCLOAK_URL="https://login.admin.im"
+KEYCLOAK_REALM="admin-apps"
+N8N_URL="https://automate.admin.im"
 N8N_CLIENT_ID="n8n"
 N8N_CLIENT_SECRET=$(openssl rand -hex 16)
 
@@ -58,7 +58,7 @@ echo -e "${GREEN}Port forwarding established successfully.${NC}"
 echo -e "${BLUE}Getting admin token from Keycloak...${NC}"
 ADMIN_TOKEN=$(curl -s -X POST \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "username=xalg" \
+    -d "username=admin" \
     -d "password=changeme123" \
     -d "grant_type=password" \
     -d "client_id=admin-cli" \
@@ -227,7 +227,7 @@ echo -e "${GREEN}n8n restart initiated.${NC}"
 if command -v vault &>/dev/null && [ -f ~/.vault/credentials ]; then
     echo -e "${BLUE}Storing client secrets in Vault...${NC}"
     source ~/.vault/credentials
-    export VAULT_ADDR=${VAULT_ADDR:-"https://vault.gray-beard.com"}
+    export VAULT_ADDR=${VAULT_ADDR:-"https://vault.admin.im"}
     
     if [ -n "$VAULT_ROOT_TOKEN" ]; then
         echo -e "${BLUE}Using Vault credentials from ~/.vault/credentials${NC}"

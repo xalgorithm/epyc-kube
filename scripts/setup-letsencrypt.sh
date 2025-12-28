@@ -18,18 +18,18 @@ fi
 
 # List of all your domains
 DOMAINS=(
-    "grafana.gray-beard.com"
-    "airflow.gray-beard.com"
-    "automate.gray-beard.com"
-    "automate2.gray-beard.com"
-    "ethos.gray-beard.com"
-    "ethosenv.gray-beard.com"
+    "grafana.admin.im"
+    "airflow.admin.im"
+    "automate.admin.im"
+    "automate2.admin.im"
+    "ethos.admin.im"
+    "ethosenv.admin.im"
     "kampfzwerg.gray-beard.com"
-    "login.gray-beard.com"
-    "notify.gray-beard.com"
-    "blackrock.gray-beard.com"
-    "couchdb.blackrock.gray-beard.com"
-    "vault.gray-beard.com"
+    "login.admin.im"
+    "notify.admin.im"
+    "blackrock.admin.im"
+    "couchdb.blackrock.admin.im"
+    "vault.admin.im"
 )
 
 # Build certbot command with all domains

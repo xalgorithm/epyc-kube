@@ -26,11 +26,11 @@ data:
     enabled = false
     
     [server]
-    root_url = https://grafana.gray-beard.com
+    root_url = https://grafana.admin.im
     
-    [users.xalg]
-    name = xalg
+    [users.admin]
+    name = admin
     password = admin123.
-    email = xalg@example.com
-    login = xalg
+    email = admin@example.com
+    login = admin
     is_admin = true 

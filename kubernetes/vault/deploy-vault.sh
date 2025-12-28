@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 VAULT_PASSWORD=${VAULT_PASSWORD:-"changeme"}
-VAULT_DOMAIN=${VAULT_DOMAIN:-"vault.gray-beard.com"}
+VAULT_DOMAIN=${VAULT_DOMAIN:-"vault.admin.im"}
 
 echo "Deploying HashiCorp Vault..."
 
@@ -119,7 +119,7 @@ curl -s \
 curl -s \
     --header "X-Vault-Token: $ROOT_TOKEN" \
     --request POST \
-    --data "{\"data\": {\"username\": \"xalg\", \"password\": \"$VAULT_PASSWORD\", \"secret_cookie\": \"obsidian-sync-cookie-$(openssl rand -hex 8)\"}}" \
+    --data "{\"data\": {\"username\": \"admin\", \"password\": \"$VAULT_PASSWORD\", \"secret_cookie\": \"obsidian-sync-cookie-$(openssl rand -hex 8)\"}}" \
     http://127.0.0.1:8200/v1/secret/data/couchdb
 
 # Store K3s token

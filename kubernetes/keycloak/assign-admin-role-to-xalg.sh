@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Assign admin role to xalg user in Keycloak
-# This script assigns the admin role to the xalg user for Grafana access
+# Assign admin role to admin user in Keycloak
+# This script assigns the admin role to the admin user for Grafana access
 
 set -euo pipefail
 
@@ -13,10 +13,10 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-KEYCLOAK_ADMIN_USER="xalg"
+KEYCLOAK_ADMIN_USER="admin"
 KEYCLOAK_ADMIN_PASSWORD="changeme123"
-KEYCLOAK_REALM="xalg-apps"
-TARGET_USERNAME="xalg"
+KEYCLOAK_REALM="admin-apps"
+TARGET_USERNAME="admin"
 
 echo -e "${BLUE}Assigning admin role to user: $TARGET_USERNAME${NC}"
 

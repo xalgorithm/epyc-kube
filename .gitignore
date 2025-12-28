@@ -75,9 +75,13 @@ wordpress-site/
 *Secret*
 *password*
 *Password*
+*credentials*
+*Credentials*
 *.key
 *.pem
 *.crt
+*.p12
+*.pfx
 
 # Exclude generated/local files
 kubeconfig

@@ -11,9 +11,9 @@ NC="\033[0m" # No Color
 echo -e "${BLUE}Configuring Grafana with Keycloak SSO${NC}"
 
 # Configuration variables
-KEYCLOAK_URL="https://login.gray-beard.com"
-KEYCLOAK_REALM="xalg-apps"
-GRAFANA_URL="https://grafana.gray-beard.com"
+KEYCLOAK_URL="https://login.admin.im"
+KEYCLOAK_REALM="admin-apps"
+GRAFANA_URL="https://grafana.admin.im"
 GRAFANA_CLIENT_ID="grafana"
 GRAFANA_CLIENT_SECRET=$(openssl rand -hex 16)
 
@@ -59,7 +59,7 @@ echo -e "${GREEN}Port forwarding established successfully.${NC}"
 echo -e "${BLUE}Getting admin token from Keycloak...${NC}"
 ADMIN_TOKEN=$(curl -s -X POST \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "username=xalg" \
+    -d "username=admin" \
     -d "password=changeme123" \
     -d "grant_type=password" \
     -d "client_id=admin-cli" \

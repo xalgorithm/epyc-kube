@@ -15,7 +15,7 @@ echo
 # Source Vault credentials
 if [ -f ~/.vault/credentials ]; then
     source ~/.vault/credentials
-    export VAULT_ADDR=${VAULT_ADDR:-"https://vault.gray-beard.com"}
+    export VAULT_ADDR=${VAULT_ADDR:-"https://vault.admin.im"}
     if [ -n "$VAULT_ROOT_TOKEN" ]; then
         echo -e "${BLUE}Using Vault credentials from ~/.vault/credentials${NC}"
         vault login $VAULT_ROOT_TOKEN > /dev/null
@@ -23,15 +23,15 @@ if [ -f ~/.vault/credentials ]; then
 fi
 
 # Configuration variables
-KEYCLOAK_URL="https://login.gray-beard.com"
-KEYCLOAK_REALM="xalg-apps"
-KEYCLOAK_ADMIN_USER="xalg"
+KEYCLOAK_URL="https://login.admin.im"
+KEYCLOAK_REALM="admin-apps"
+KEYCLOAK_ADMIN_USER="admin"
 KEYCLOAK_ADMIN_PASSWORD="changeme123"
 
 # Application URLs
-GRAFANA_URL="https://grafana.gray-beard.com"
-N8N_URL="https://automate.gray-beard.com"
-WORDPRESS_URL="https://blog.gray-beard.com"
+GRAFANA_URL="https://grafana.admin.im"
+N8N_URL="https://automate.admin.im"
+WORDPRESS_URL="https://blog.admin.im"
 
 # Client IDs and secrets
 GRAFANA_CLIENT_ID="grafana"

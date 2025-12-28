@@ -184,12 +184,12 @@ This diagram illustrates the complete architecture of the project, showing the r
 - **Networking**: 
   - Public bridge (vmbr1): 10.0.1.0/24
   - Private bridge (vmbr2): 192.168.100.0/24
-  - MetalLB pool: 10.0.2.8/29
+  - MetalLB pool: 10.0.2.0/29
   - WireGuard VPN: Secure bridge to home network
 
 #### 2. Core Platform Services
 - **Traefik Ingress Controller**: 
-  - HTTP/HTTPS routing (LoadBalancer IP: 10.0.2.9)
+  - HTTP/HTTPS routing (LoadBalancer IP: 10.0.2.1)
   - Automatic TLS termination
   - WebSocket support
 - **Cert-Manager**: Automated Let's Encrypt certificates
@@ -240,7 +240,7 @@ This diagram illustrates the complete architecture of the project, showing the r
 #### 6. Application Layer
 - **WordPress Sites**:
   - ethos.gray-beard.com: Production WordPress (MySQL 8.0)
-  - kampfzwerg.gray-beard.com: German WordPress site
+  - kampfzwerg.gray-beard.com: WordPress site
   - WP-CLI management
   - Automated daily backups
 - **Obsidian Sync** (blackrock.gray-beard.com):
@@ -263,7 +263,7 @@ This diagram illustrates the complete architecture of the project, showing the r
 ```
 Internet → Nginx Reverse Proxy (80/443)
     ↓
-Traefik Ingress (MetalLB: 10.0.2.9)
+Traefik Ingress (MetalLB: 10.0.2.1)
     ↓
 Service Routing (based on Host headers)
     ↓
@@ -315,20 +315,20 @@ Application Pods (environment variables)
 ```
 Internet
     ↓
-Gateway/Firewall (10.0.1.209)
+Gateway/Firewall (10.0.1.1)
     ↓
 Proxmox Host
     ├── vmbr1 (Public Bridge)
-    │   ├── Node IPs: 10.0.1.211-213
-    │   └── MetalLB Pool: 10.0.2.8/29
-    │       └── Traefik LB: 10.0.2.9
+    │   ├── Node IPs: 10.0.1.11-13
+    │   └── MetalLB Pool: 10.0.2.0/29
+    │       └── Traefik LB: 10.0.2.1
     └── vmbr2 (Private Bridge)
         └── Private Network: 192.168.100.0/24
             └── Inter-node communication
 
 WireGuard VPN Tunnel
-    ├── Colocation (10.10.10.2)
-    └── Home Network (10.10.10.1) via OPNsense
+    ├── Colocation (10.50.50.2)
+    └── Home Network (10.50.50.1) via OPNsense
         └── Backup: Tailscale mesh network
 ```
 
@@ -371,7 +371,7 @@ Deploys a comprehensive observability stack:
 - **Traefik Ingress**: Automatic routing, SSL termination, WebSocket support
 - **WireGuard VPN**: Secure network bridge between colocation and home network
 - **Nginx Reverse Proxy**: External traffic handling on standard ports (80/443)
-- **Multiple Subnets**: Public (10.0.1.0/24), Private (192.168.100.0/24), MetalLB (10.0.2.8/29)
+- **Multiple Subnets**: Public (10.0.1.0/24), Private (192.168.100.0/24), MetalLB (10.0.2.0/29)
 
 #### Storage
 - **NFS Provisioner**: Dynamic persistent volume provisioning
@@ -523,15 +523,15 @@ Deploys a comprehensive observability stack:
 
 #### Network Topology
 ```
-Internet → Gateway (10.0.1.209)
+Internet → Gateway (10.0.1.1)
     ↓
 Proxmox Host
     ↓
 vmbr1 (Public Bridge)
-    ├── K8s Nodes (10.0.1.211-213)
-    └── MetalLB Pool (10.0.2.8/29)
+    ├── K8s Nodes (10.0.1.11-13)
+    └── MetalLB Pool (10.0.2.0/29)
         ↓
-    Traefik Ingress (10.0.2.9)
+    Traefik Ingress (10.0.2.1)
         ↓
     Application Services
 ```
@@ -613,7 +613,7 @@ The project deploys the following production services:
 
 #### WordPress Sites
 - **ethos.gray-beard.com**: Production WordPress with SSL
-- **kampfzwerg.gray-beard.com**: WordPress site with German content
+- **kampfzwerg.gray-beard.com**: WordPress site
 - MySQL 8.0 databases
 - WP-CLI for management
 - Automated daily backups
@@ -729,7 +729,7 @@ VAULT_PASSWORD="your-secure-password" SMTP_PASSWORD="your-email-app-password" ./
 
 1. **Web UI Access**:
    - The Vault UI is available at `https://vault.gray-beard.com`
-   - Use the initial root password: `********` (refer to the deployment script)
+   - Use the initial root password (refer to the deployment script)
 
 2. **CLI Access**:
    - Source the credentials file to load environment variables:
@@ -761,7 +761,7 @@ source ~/.vault/credentials
 
 # Update a secret using the Vault CLI
 export VAULT_ADDR=https://vault.gray-beard.com
-vault kv put secret/n8n admin_password="********" admin_user="admin"
+vault kv put secret/n8n admin_password="<secure-password>" admin_user="admin"
 ```
 
 ### Security Notes

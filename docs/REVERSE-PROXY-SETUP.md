@@ -1,6 +1,14 @@
 # Nginx Reverse Proxy Setup for Kubernetes Services
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Scripts Reference](../scripts/README.md) | [Config Files](../config/README.md)
+
 This setup creates an nginx reverse proxy that forwards traffic from standard ports (80/443) to your Kubernetes NodePorts, making all your services accessible on their proper domains.
+
+**Related Documentation:**
+- [Traefik Connectivity](traefik-external-connectivity-fix.md) - Troubleshooting LoadBalancer connectivity
+- [Configuration Files](../config/nginx/) - Nginx configuration templates
+- [Setup Script](../scripts/setup-reverse-proxy.sh) - Automated deployment
+- [Test Script](../scripts/test-all-domains.sh) - Connectivity verification
 
 ## 🚀 Quick Setup
 

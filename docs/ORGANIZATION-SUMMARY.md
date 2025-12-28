@@ -1,6 +1,14 @@
 # Project Organization Summary
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Git Cleanup](GIT-CLEANUP-SUMMARY.md)
+
 This document summarizes the file organization and cleanup performed on the project.
+
+**Related Documentation:**
+- [Main README](../README.md) - Current project structure
+- [Scripts Documentation](../scripts/README.md) - Organized scripts
+- [Config Documentation](../config/README.md) - Configuration files
+- [Kubernetes Manifests](../kubernetes/) - Application deployments
 
 ## 📁 Files Organized
 

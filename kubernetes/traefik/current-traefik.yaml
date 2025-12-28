@@ -60,6 +60,7 @@ spec:
         - --providers.kubernetesingress
         - --providers.kubernetesingress.allowEmptyServices=true
         - --providers.kubernetesingress.ingressendpoint.publishedservice=kube-system/traefik
+        - --providers.kubernetesingress.ingressendpoint.ip=10.0.1.211
         - --entryPoints.websecure.http.tls=true
         - --log.level=INFO
         env:

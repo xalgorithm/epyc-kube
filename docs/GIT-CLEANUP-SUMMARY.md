@@ -1,5 +1,12 @@
 # Git History Cleanup Summary
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Organization Summary](ORGANIZATION-SUMMARY.md)
+
+This document details the git history cleanup performed to optimize the repository.
+
+**Related Documentation:**
+- [Organization Summary](ORGANIZATION-SUMMARY.md) - File organization improvements
+
 ## 🗑️ File Removed from Git History
 
 **File:** `scripts/backups/ethosenv/ethosenv_wordpress_20251018_155729.tar.gz`

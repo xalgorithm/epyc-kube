@@ -1,6 +1,13 @@
 # Secure Credential Management with HashiCorp Vault
 
+> 📚 **Navigation:** [Main README](../../README.md) | [Documentation Index](../../docs/README.md) | [Keycloak SSO](../keycloak/README.md)
+
 This directory contains configuration files and scripts to deploy HashiCorp Vault for secure credential management in the Kubernetes cluster.
+
+**Related Documentation:**
+- [Main README](../../README.md) - Platform overview
+- [Keycloak SSO](../keycloak/README.md) - Authentication integration
+- [Secrets Management Best Practices](../../docs/README.md)
 
 ## Architecture
 

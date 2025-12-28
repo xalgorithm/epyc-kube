@@ -1,6 +1,13 @@
 # OPNsense WireGuard Configuration Guide
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Network Bridge Overview](network-bridge.md) | [Deployment Checklist](network-bridge-checklist.md)
+
 This guide provides step-by-step instructions for configuring WireGuard on OPNsense to establish a secure connection with your colocation server.
+
+**Related Documentation:**
+- [Network Bridge Architecture](network-bridge.md) - Complete VPN bridge overview
+- [Deployment Checklist](network-bridge-checklist.md) - Step-by-step deployment guide
+- [Colocation Setup Script](../scripts/setup-colo-wireguard.sh) - Automated server configuration
 
 ## Prerequisites
 

@@ -117,7 +117,7 @@ resource "local_file" "cloud_init_user_data" {
   
   depends_on = [null_resource.create_snippet_dir]
   
-  content = templatefile("${path.root}/cloud-init-userdata.tftpl", {
+  content = templatefile("${path.root}/templates/cloud-init-userdata.tftpl", {
     hostname      = each.key
     vm_user       = var.vm_user
     ssh_key       = chomp(local.ssh_public_key_content)

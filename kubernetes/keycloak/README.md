@@ -1,6 +1,13 @@
 # Keycloak Single Sign-On (SSO) Setup
 
+> 📚 **Navigation:** [Main README](../../README.md) | [Documentation Index](../../docs/README.md) | [Vault](../vault/README.md)
+
 This directory contains scripts and configuration files for setting up Keycloak as a Single Sign-On (SSO) provider for applications in the Kubernetes cluster.
+
+**Related Documentation:**
+- [Main README](../../README.md) - Platform capabilities
+- [Vault Setup](../vault/README.md) - Secrets management
+- [Grafana SSO](../grafana/README.md) - Grafana integration
 
 ## Overview
 

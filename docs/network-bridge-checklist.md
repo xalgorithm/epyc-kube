@@ -1,6 +1,14 @@
 # Network Bridge Deployment Checklist
 
+> 📚 **Navigation:** [Main README](../README.md) | [Documentation Index](README.md) | [Network Bridge Guide](network-bridge.md) | [OPNsense Setup](opnsense-wireguard-setup.md)
+
 Use this checklist to ensure proper implementation of the secure network bridge between your colocation server and home network.
+
+**Related Documentation:**
+- [Network Bridge Architecture](network-bridge.md) - Complete VPN bridge overview
+- [OPNsense Configuration Guide](opnsense-wireguard-setup.md) - Step-by-step OPNsense setup
+- [Colocation Setup Script](../scripts/setup-colo-wireguard.sh) - Automated server configuration
+- [Tailscale Backup Script](../scripts/setup-tailscale-backup.sh) - Backup connectivity
 
 ## Pre-Deployment Preparation
 

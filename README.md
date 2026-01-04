@@ -22,6 +22,9 @@ The project is organized with proper Terraform modules and clean directory struc
 
 ```
 .
+├── .vscode/                       # IDE configuration files
+│   ├── .cursorrules               # Cursor AI rules
+│   └── epyc.code-workspace        # VS Code workspace
 ├── modules/                       # Terraform modules
 │   ├── proxmox/                   # Proxmox VM provisioning (3-node cluster)
 │   ├── kubernetes/                # Kubernetes infrastructure (MetalLB, NFS)
@@ -35,7 +38,7 @@ The project is organized with proper Terraform modules and clean directory struc
 │   ├── grafana/                   # Grafana dashboards and integrations
 │   ├── keycloak/                  # Single Sign-On (SSO) authentication
 │   ├── n8n/                       # n8n workflow automation
-│   ├── nfty/                      # ntfy notification service
+│   ├── ntfy/                      # ntfy notification service
 │   ├── nozyu/                     # Custom application (Go/TypeScript)
 │   ├── obsidian/                  # Obsidian Sync with CouchDB
 │   ├── vault/                     # HashiCorp Vault secrets management
@@ -65,6 +68,7 @@ The project is organized with proper Terraform modules and clean directory struc
 │   └── README.md                  # Configuration documentation
 ├── backups/                       # Backup storage
 │   ├── ethosenv/                  # EthosEnv WordPress backups
+│   ├── n8n/                       # n8n backup archives
 │   ├── wordpress/                 # Kampfzwerg WordPress backups
 │   └── README.md                  # Backup system documentation
 ├── charts/                        # Helm charts

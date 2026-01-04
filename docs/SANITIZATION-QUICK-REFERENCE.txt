@@ -1,0 +1,89 @@
+╔═══════════════════════════════════════════════════════════════╗
+║     SANITIZATION QUICK REFERENCE                              ║
+╚═══════════════════════════════════════════════════════════════╝
+
+REVIEW THESE FILES BEFORE EXECUTING:
+
+1. sanitization-analysis.txt
+   - Complete list of what will be changed
+   - All affected files and commits
+   - Risk assessment
+
+2. sanitize-git-history.sh
+   - The actual script that does the work
+   - Review the sed patterns to ensure correctness
+
+═══════════════════════════════════════════════════════════════
+SAMPLE FILES TO CHECK MANUALLY (current state):
+═══════════════════════════════════════════════════════════════
+
+Check for passwords:
+  grep -r "Pr1amsf0lly" kubernetes/grafana/ kubernetes/n8n/ kubernetes/keycloak/ 2>/dev/null | head -5
+
+Check for emails:
+  grep -r "x.algorithm@gmail.com\|find.me@xalg.im" . --include="*.yaml" --include="*.sh" 2>/dev/null | head -5
+
+Check for IPs:
+  grep -r "107.172.99\|198.55.108" docs/ kubernetes/ 2>/dev/null | head -5
+
+Check for domains:
+  grep -r "\.xalg\.im\|kampfzwerg\.me" README.md docs/ 2>/dev/null | head -5
+
+═══════════════════════════════════════════════════════════════
+AFTER SANITIZATION - VERIFY:
+═══════════════════════════════════════════════════════════════
+
+Check passwords are removed:
+  git log --all -p | grep -i "Pr1amsf0lly" || echo "✓ No passwords found"
+
+Check emails are sanitized:
+  git log --all -p | grep -i "x.algorithm@gmail.com" || echo "✓ No personal emails found"
+  git log --all --format="%ae %ce" | sort -u
+
+Check IPs are replaced:
+  git log --all -p | grep -E "107\.172\.99|198\.55\.108" || echo "✓ No public IPs found"
+
+Check domains are replaced:
+  git log --all -p | grep -E "\.xalg\.im|kampfzwerg\.me" | head -5
+
+═══════════════════════════════════════════════════════════════
+EXECUTION STEPS:
+═══════════════════════════════════════════════════════════════
+
+1. Review current state:
+   cat sanitization-analysis.txt
+
+2. Run sanitization:
+   ./sanitize-git-history.sh
+   (Will prompt for confirmation)
+
+3. Verify results:
+   Run the verification commands above
+
+4. If good, ready to push:
+   git push --force --all
+   git push --force --tags
+
+5. If issues found, revert:
+   git checkout backup-before-sanitization-<timestamp>
+
+═══════════════════════════════════════════════════════════════
+REPLACEMENTS SUMMARY:
+═══════════════════════════════════════════════════════════════
+
+Pr1amsf0lly!              → <REDACTED_PASSWORD>
+UHIxYW1zZjBsbHkh          → <REDACTED_PASSWORD_B64>
+x.algorithm@gmail.com     → admin@example.com
+find.me@xalg.im           → contact@example.com
+xalg                      → admin
+107.172.99.x              → 10.0.1.x
+198.55.108.x              → 10.0.2.x
+192.168.0.x               → 192.168.100.x
+*.xalg.im                 → *.gray-beard.com
+kampfzwerg.me             → kampfzwerg.gray-beard.com
+
+Git author/committer:
+x.algorithm@gmail.com     → admin@example.com
+xalg                      → Admin User
+
+═══════════════════════════════════════════════════════════════

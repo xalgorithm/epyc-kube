@@ -64,7 +64,7 @@ if [[ $confirm =~ ^[Yy]$ ]]; then
     
     # Apply MySQL conservative patch
     echo -e "${YELLOW}Applying MySQL conservative resource increase...${NC}"
-    if kubectl patch deployment mysql -n $NAMESPACE --patch-file kubernetes/ethosenv/mysql-resources-conservative.yaml; then
+    if kubectl patch deployment mysql -n $NAMESPACE --patch-file kubernetes/ethosenv-k8s/mysql-resources-conservative.yaml; then
         echo -e "${GREEN}✓ MySQL conservative patch applied${NC}"
     else
         echo -e "${RED}✗ Failed to apply MySQL conservative patch${NC}"
@@ -73,7 +73,7 @@ if [[ $confirm =~ ^[Yy]$ ]]; then
     
     # Apply WordPress conservative patch
     echo -e "${YELLOW}Applying WordPress conservative resource increase...${NC}"
-    if kubectl patch deployment wordpress -n $NAMESPACE --patch-file kubernetes/ethosenv/wordpress-resources-conservative.yaml; then
+    if kubectl patch deployment wordpress -n $NAMESPACE --patch-file kubernetes/ethosenv-k8s/wordpress-resources-conservative.yaml; then
         echo -e "${GREEN}✓ WordPress conservative patch applied${NC}"
     else
         echo -e "${RED}✗ Failed to apply WordPress conservative patch${NC}"

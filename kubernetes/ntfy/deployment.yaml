@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ntfy
+  namespace: ntfy
+  labels:
+    app: ntfy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ntfy
+  template:
+    metadata:
+      labels:
+        app: ntfy
+    spec:
+      containers:
+      - name: ntfy
+        image: binwiederhier/ntfy:latest
+        imagePullPolicy: Always
+        args: ["serve"]
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+        env:
+        - name: NTFY_LISTEN_ADDR
+          value: "0.0.0.0:80"
+        - name: NTFY_BASE_URL
+          value: "https://notify.gray-beard.com"
+        - name: NTFY_UPSTREAM_BASE_URL
+          value: "https://ntfy.sh"
+        volumeMounts:
+        - name: ntfy-data
+          mountPath: /data
+      volumes:
+      - name: ntfy-data
+        persistentVolumeClaim:
+          claimName: ntfy-data

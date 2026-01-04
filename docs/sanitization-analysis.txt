@@ -1,0 +1,198 @@
+╔═══════════════════════════════════════════════════════════════╗
+║     GIT HISTORY SANITIZATION ANALYSIS                         ║
+╚═══════════════════════════════════════════════════════════════╝
+
+OVERVIEW:
+  Total commits: 49
+  Commits affected: ~25 (estimated)
+  Files affected: ~130
+
+═══════════════════════════════════════════════════════════════
+SENSITIVE DATA FOUND IN GIT HISTORY:
+═══════════════════════════════════════════════════════════════
+
+1. PASSWORDS
+   ├─ Pr1amsf0lly!  → <REDACTED_PASSWORD>
+   └─ Found in: 20 files across 3 commits
+
+2. EMAIL ADDRESSES
+   ├─ x.algorithm@gmail.com  → admin@example.com
+   │  └─ Found in: 12 files across 5 commits
+   ├─ find.me@xalg.im  → contact@example.com
+   │  └─ Found in: 3 files across 5 commits
+   └─ Also in git commit author/committer metadata
+
+3. USERNAMES
+   ├─ xalg  → admin
+   └─ Found throughout documentation and scripts
+
+4. IP ADDRESSES
+   ├─ 107.172.99.x  → 10.0.1.x (private CIDR)
+   │  └─ Found in: 15 files
+   ├─ 198.55.108.x  → 10.0.2.x (private CIDR)
+   │  └─ Found in: 10 files
+   └─ 192.168.0.x  → 192.168.100.x (different private)
+       └─ Found in: multiple network config files
+
+5. DOMAINS
+   ├─ *.xalg.im  → *.gray-beard.com
+   │  └─ Found in: 115 files
+   └─ kampfzwerg.me  → kampfzwerg.gray-beard.com
+       └─ Found in: 10 files
+
+═══════════════════════════════════════════════════════════════
+KEY FILES AFFECTED:
+═══════════════════════════════════════════════════════════════
+
+KUBERNETES MANIFESTS:
+  ├─ kubernetes/grafana/*.sh (multiple admin scripts)
+  ├─ kubernetes/grafana/*.yaml (credential configs)
+  ├─ kubernetes/keycloak/*.sh (SSO configuration scripts)
+  ├─ kubernetes/n8n/*.yaml (n8n credential resets)
+  ├─ kubernetes/alertmanager-config.yaml
+  ├─ kubernetes/traefik/*.yaml
+  └─ kubernetes/wordpress/*.yaml
+
+TERRAFORM CONFIGS:
+  ├─ main.tf
+  ├─ modules/kubernetes/metallb-config.yaml
+  └─ modules/cert-manager/cluster-issuer.yaml
+
+DOCUMENTATION:
+  ├─ README.md
+  ├─ docs/*.md (all documentation files)
+  └─ kubernetes/*/README.md
+
+SCRIPTS:
+  ├─ scripts/*.sh (network configuration scripts)
+  ├─ setup-letsencrypt.sh
+  └─ check-services.sh
+
+BACKUP FILES:
+  └─ scripts/backups/ethosenv/*.sql (database dumps)
+
+═══════════════════════════════════════════════════════════════
+COMMITS WITH PASSWORDS:
+═══════════════════════════════════════════════════════════════
+
+08f0ca5  Added ethos env, grafana edits, and keycloak updates
+<hash>   Added n8n credential reset scripts
+<hash>   Added Grafana admin configuration
+
+═══════════════════════════════════════════════════════════════
+COMMITS WITH EMAILS:
+═══════════════════════════════════════════════════════════════
+
+Multiple commits across:
+  - Alertmanager configurations
+  - Cert-Manager Let's Encrypt configs
+  - Vault deployment scripts
+  - n8n credential resets
+
+═══════════════════════════════════════════════════════════════
+GIT COMMIT METADATA:
+═══════════════════════════════════════════════════════════════
+
+Author/Committer emails found:
+  ├─ x.algorithm@gmail.com (needs to be changed in commits)
+  └─ vincent@fruitscout.ai (can remain)
+
+⚠️  NOTE: Git filter-branch will NOT change author/committer emails
+    This requires separate --env-filter or git filter-repo
+
+═══════════════════════════════════════════════════════════════
+SANITIZATION STRATEGY:
+═══════════════════════════════════════════════════════════════
+
+METHOD: git filter-branch with tree-filter
+  ├─ Rewrites entire commit history
+  ├─ Applies sed replacements to all matching files
+  ├─ Preserves commit structure and dates
+  └─ Updates all branch pointers
+
+BACKUP: Automatic branch created before sanitization
+  └─ backup-before-sanitization-<timestamp>
+
+VERIFICATION: Manual review required after sanitization
+  ├─ Check sample files for sensitive data
+  ├─ Verify replacements are correct
+  └─ Ensure no new issues introduced
+
+═══════════════════════════════════════════════════════════════
+EXECUTION PLAN:
+═══════════════════════════════════════════════════════════════
+
+1. Create backup branch
+2. Run git filter-branch with replacements
+3. Clean up git refs and reflog
+4. Garbage collect unreachable objects
+5. Verify sanitization
+6. (User reviews before commit/push)
+
+═══════════════════════════════════════════════════════════════
+POST-SANITIZATION STEPS:
+═══════════════════════════════════════════════════════════════
+
+MANDATORY REVIEW:
+  ├─ Check key files for missed sensitive data
+  ├─ Verify replacements didn't break configs
+  └─ Test critical scripts still work
+
+IF APPROVED:
+  ├─ git push --force --all (overwrites remote history)
+  ├─ git push --force --tags
+  └─ Notify team members to re-clone
+
+IF ISSUES FOUND:
+  ├─ git checkout backup-before-sanitization-<timestamp>
+  └─ Adjust sanitization script and retry
+
+═══════════════════════════════════════════════════════════════
+ADDITIONAL CONSIDERATIONS:
+═══════════════════════════════════════════════════════════════
+
+⚠️  AUTHOR/COMMITTER EMAILS:
+    The current script does NOT change git commit metadata.
+    To also sanitize author emails, use:
+    
+    git filter-branch --env-filter '
+        if [ "$GIT_AUTHOR_EMAIL" = "x.algorithm@gmail.com" ]; then
+            export GIT_AUTHOR_EMAIL="admin@example.com"
+        fi
+        if [ "$GIT_COMMITTER_EMAIL" = "x.algorithm@gmail.com" ]; then
+            export GIT_COMMITTER_EMAIL="admin@example.com"
+        fi
+    ' --all
+
+⚠️  BASE64 ENCODED SECRETS:
+    Some passwords may be base64 encoded in Kubernetes secrets.
+    The script handles plaintext; encoded versions need manual review.
+
+⚠️  DATABASE DUMPS:
+    SQL files in backups/ contain passwords in plaintext.
+    These will be sanitized by the script.
+
+═══════════════════════════════════════════════════════════════
+RISKS:
+═══════════════════════════════════════════════════════════════
+
+LOW RISK:
+  ├─ Backup branch created automatically
+  ├─ Can revert if issues found
+  └─ Local-only until user pushes
+
+MEDIUM RISK:
+  ├─ sed might replace unintended matches
+  ├─ Binary files might get corrupted
+  └─ Need to verify configs still work
+
+HIGH RISK (after push):
+  ├─ Remote history is overwritten (irreversible)
+  ├─ Team members must re-clone or rebase
+  └─ Any forks become outdated
+
+═══════════════════════════════════════════════════════════════
+
+READY TO EXECUTE:
+  Run: ./sanitize-git-history.sh
+

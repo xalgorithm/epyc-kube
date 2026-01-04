@@ -10,6 +10,31 @@ This document summarizes the file organization and cleanup performed on the proj
 - [Config Documentation](../config/README.md) - Configuration files
 - [Kubernetes Manifests](../kubernetes/) - Application deployments
 
+## 🔄 Recent Reorganization (January 2026)
+
+### Root Directory Cleanup
+- ✅ Moved `.cursorrules` to `.vscode/`
+- ✅ Moved `epyc.code-workspace` to `.vscode/`
+- ✅ Moved `n8n-backup-20250814-1732.tar.gz` to `backups/n8n/`
+- ✅ Removed orphaned `values.yaml` file
+- ✅ Removed temporary `couchdb_metrics.txt` file
+- ✅ Removed `Divi.zip` (obsolete WordPress theme)
+- ✅ Cleaned up old Terraform state backups
+- ✅ Removed all `.DS_Store` files throughout repository
+
+### Directory Renaming
+- ✅ Renamed `kubernetes/nfty/` to `kubernetes/ntfy/` (correct spelling)
+- ✅ Updated namespace references in ntfy manifests
+- ✅ Updated all script references to use new path
+
+### Directory Consolidation
+- ✅ Consolidated `kubernetes/ethosenv/` into `kubernetes/ethosenv-k8s/`
+- ✅ Removed legacy Docker Compose files from ethosenv
+
+### New Directory Structure
+- ✅ Created `.vscode/` for IDE configuration files
+- ✅ Created `backups/n8n/` for n8n backup archives
+
 ## 📁 Files Organized
 
 ### Scripts → `scripts/`
@@ -71,11 +96,38 @@ This document summarizes the file organization and cleanup performed on the proj
 - ✅ `variables.tf` - Terraform variables
 - ✅ `outputs.tf` - Terraform outputs
 - ✅ `terraform.tfvars` - Variable values
+- ✅ `nok8s.tfvars` - Non-Kubernetes variable values
 - ✅ `kubeconfig.yaml` - Kubernetes configuration
 - ✅ `README.md` - Main project documentation
 - ✅ `.gitignore` - Git ignore rules
-- ✅ Terraform state files
-- ✅ SSH configuration files
+- ✅ `.terraform.lock.hcl` - Terraform lock file
+- ✅ `terraform.tfstate` - Terraform state
+- ✅ `terraform.tfstate.backup` - Single state backup
+- ✅ `ssh_config` - SSH configuration
+
+## 📂 Current Directory Structure
+
+```
+.
+├── .vscode/                    # IDE configuration (NEW)
+│   ├── .cursorrules
+│   └── epyc.code-workspace
+├── backups/
+│   ├── ethosenv/
+│   ├── n8n/                    # NEW - n8n backup archives
+│   └── wordpress/
+├── kubernetes/
+│   ├── ntfy/                   # RENAMED from nfty
+│   ├── ethosenv-k8s/           # PRIMARY (consolidated)
+│   └── ...
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── README.md
+├── .gitignore
+├── kubeconfig.yaml
+└── ssh_config
+```
 
 ## 🎯 Benefits of Organization
 
@@ -121,6 +173,20 @@ cat docs/REVERSE-PROXY-SETUP.md
 ```bash
 # Copy nginx configs
 sudo cp config/nginx/*.conf /etc/nginx/sites-available/
+```
+
+### IDE Configuration
+IDE configuration files are now in `.vscode/`:
+```bash
+# Open workspace in VS Code
+code .vscode/epyc.code-workspace
+```
+
+### Kubernetes ntfy Service
+The ntfy notification service is now at the correct path:
+```bash
+# Deploy ntfy
+kubectl apply -f kubernetes/ntfy/
 ```
 
 This organization makes the project more professional, maintainable, and user-friendly while preserving all functionality.

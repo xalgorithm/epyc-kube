@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: ethosenv
+spec:
+  template:
+    spec:
+      containers:
+      - name: mysql
+        resources:
+          requests:
+            cpu: "750m"       # Conservative increase from 500m
+            memory: "1.5Gi"   # Conservative increase from 1Gi
+          limits:
+            cpu: "1200m"      # Conservative increase from 1000m
+            memory: "3Gi"     # Conservative increase from 2Gi

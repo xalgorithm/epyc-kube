@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Master WordPress Deployment Script
-# Deploys WordPress from kubernetes/ethosenv to Kubernetes cluster with all fixes and migrations
+# Deploys WordPress from kubernetes/ethosenv-k8s to Kubernetes cluster with all fixes and migrations
 
 set -euo pipefail
 

@@ -797,5 +797,5 @@
   "uid": "ntfy-monitoring",
   "version": 1,
   "weekStart": "",
-  "description": "Dashboard for monitoring ntfy notification service. Access ntfy via port-forwarding with './connect-to-ntfy.sh' in the kubernetes/nfty directory."
-} 
+  "description": "Dashboard for monitoring ntfy notification service. Access ntfy via port-forwarding with './connect-to-ntfy.sh' in the kubernetes/ntfy directory."
+}

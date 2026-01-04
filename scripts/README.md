@@ -2,6 +2,14 @@
 
 This directory contains utility scripts for managing the Kubernetes cluster and services.
 
+## 📁 Directory Structure
+
+All scripts are organized in this central location. Related scripts are grouped by function:
+- **Infrastructure**: Setup and configuration scripts
+- **Diagnostic**: Health checks and troubleshooting
+- **Backup**: Data backup and restoration
+- **Cleanup**: Resource removal and migration
+
 ## 🔧 Infrastructure Scripts
 
 ### `setup-reverse-proxy.sh`
@@ -29,6 +37,23 @@ Configures Let's Encrypt SSL certificates for all domains.
 **Prerequisites:**
 - DNS must be pointing to the server
 - Reverse proxy must be set up first
+
+## ✅ Verification Scripts
+
+### `verify-root-cleanliness.sh`
+Verifies that the root directory contains only allowed files per the project organization requirements.
+
+**Usage:**
+```bash
+./scripts/verify-root-cleanliness.sh
+```
+
+**What it checks:**
+- Only allowed file types exist in root (*.tf, *.tfvars, README.md, .gitignore, etc.)
+- Reports any violations with suggested actions
+- Returns exit code 0 on success, 1 on violations
+
+**Validates:** Requirements 1.1, 1.2, 1.3 (Root Directory Cleanliness)
 
 ## 🔍 Diagnostic Scripts
 
@@ -108,7 +133,10 @@ chmod +x scripts/*.sh
 ```
 
 ### SSH Configuration
-Most scripts expect an SSH config file in the project root for accessing Kubernetes nodes.
+Most scripts expect an SSH config file in the project root (`ssh_config`) for accessing Kubernetes nodes.
+
+### IDE Configuration
+IDE configuration files (`.cursorrules`, `epyc.code-workspace`) are located in `.vscode/` directory.
 
 ## 🔐 Security Considerations
 

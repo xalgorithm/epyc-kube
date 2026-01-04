@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: ethosenv
+spec:
+  template:
+    spec:
+      containers:
+      - name: wordpress
+        resources:
+          requests:
+            cpu: "750m"       # Increased from 500m
+            memory: "1Gi"     # Increased from 256Mi
+          limits:
+            cpu: "1500m"      # Increased from 1000m
+            memory: "2Gi"     # Increased from 512Mi

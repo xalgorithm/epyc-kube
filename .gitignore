@@ -92,6 +92,7 @@ backups/
 logs/
 tmp/
 terraform.tfstate.*.backup
+*.backup
 *.retry
 
 *.tar.gz*
@@ -103,11 +104,9 @@ terraform.tfstate.*.backup
 *.rar
 *.bz2
 *.xz
-kubernetes/ethosenv
 kubernetes/nozyu
 wordpress-site/
 
 values.yaml
 
 couchdb_metrics.txt
-kubernetes/ethosenv/

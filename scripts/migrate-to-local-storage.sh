@@ -92,7 +92,7 @@ scale_down_deployment "kampfzwerg" "wordpress"
 scale_down_deployment "keycloak" "keycloak"
 scale_down_deployment "keycloak" "keycloak-postgres"
 scale_down_deployment "n8n" "n8n"
-scale_down_deployment "nfty" "nfty"
+scale_down_deployment "ntfy" "ntfy"
 scale_down_deployment "obsidian" "couchdb"
 scale_down_deployment "obsidian" "obsidian"
 scale_down_deployment "vault" "vault"
@@ -123,7 +123,7 @@ migrate_pvc "kampfzwerg" "wordpress-data" "5Gi"
 migrate_pvc "keycloak" "keycloak-data" "1Gi"
 migrate_pvc "keycloak" "keycloak-postgres-data" "1Gi"
 migrate_pvc "n8n" "n8n-data" "1Gi"
-migrate_pvc "nfty" "nfty-data" "1Gi"
+migrate_pvc "ntfy" "ntfy-data" "1Gi"
 migrate_pvc "obsidian" "couchdb-data" "5Gi"
 migrate_pvc "obsidian" "obsidian-config" "1Gi"
 migrate_pvc "obsidian" "obsidian-vaults" "5Gi"
@@ -146,7 +146,7 @@ scale_up_deployment "kampfzwerg" "wordpress" 1
 scale_up_deployment "keycloak" "keycloak" 1
 scale_up_deployment "keycloak" "keycloak-postgres" 1
 scale_up_deployment "n8n" "n8n" 1
-scale_up_deployment "nfty" "nfty" 1
+scale_up_deployment "ntfy" "ntfy" 1
 scale_up_deployment "obsidian" "couchdb" 1
 scale_up_deployment "obsidian" "obsidian" 1
 scale_up_deployment "vault" "vault" 1
@@ -165,7 +165,7 @@ echo "🔍 Step 4: Checking service status..."
 echo "====================================="
 
 echo "Checking pod status:"
-kubectl --kubeconfig=$KUBECONFIG_FILE get pods --all-namespaces | grep -E "(automation|ethosenv|kampfzwerg|keycloak|n8n|nfty|obsidian|vault|media)"
+kubectl --kubeconfig=$KUBECONFIG_FILE get pods --all-namespaces | grep -E "(automation|ethosenv|kampfzwerg|keycloak|n8n|ntfy|obsidian|vault|media)"
 
 echo ""
 echo "Checking PVC status:"

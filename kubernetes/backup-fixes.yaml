@@ -1,0 +1,210 @@
+# Backup System Fixes
+# This file contains fixes for the persistent backup failures
+
+---
+# Fix 1: Update data-backup CronJob to use PVC instead of direct NFS mount
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: data-backup
+  namespace: backup
+  labels:
+    app: data-backup
+spec:
+  schedule: "0 3 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: data-backup
+        spec:
+          serviceAccountName: backup
+          restartPolicy: OnFailure
+          containers:
+          - name: data-backup
+            image: alpine:3.18
+            command:
+            - /bin/sh
+            args:
+            - /scripts/data-backup.sh
+            env:
+            - name: BACKUP_DIR
+              value: /backup/data
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: 1
+                memory: 1Gi
+            volumeMounts:
+            - name: backup-scripts
+              mountPath: /scripts
+            - name: backup-storage
+              mountPath: /backup
+            - name: kubectl-config
+              mountPath: /root/.kube
+              readOnly: true
+          volumes:
+          - name: backup-scripts
+            configMap:
+              name: backup-scripts
+              defaultMode: 0755
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-storage-pvc
+          - name: kubectl-config
+            secret:
+              secretName: backup-kubeconfig
+
+---
+# Fix 2: Update backup-cleanup CronJob to use PVC instead of direct NFS mount
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-cleanup
+  namespace: backup
+  labels:
+    app: backup-cleanup
+spec:
+  schedule: "0 4 * * 0"  # Weekly on Sunday at 4 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: backup-cleanup
+        spec:
+          serviceAccountName: backup
+          restartPolicy: OnFailure
+          containers:
+          - name: backup-cleanup
+            image: alpine:3.18
+            command:
+            - /bin/sh
+            args:
+            - /scripts/backup-cleanup.sh
+            env:
+            - name: BACKUP_DIR
+              value: /backup
+            - name: RETENTION_DAYS
+              value: "30"
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+            volumeMounts:
+            - name: backup-scripts
+              mountPath: /scripts
+            - name: backup-storage
+              mountPath: /backup
+          volumes:
+          - name: backup-scripts
+            configMap:
+              name: backup-scripts
+              defaultMode: 0755
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-storage-pvc
+
+---
+# Fix 3: Update etcd-backup CronJob with correct node selector
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: backup
+  labels:
+    app: etcd-backup
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: etcd-backup
+        spec:
+          serviceAccountName: backup
+          restartPolicy: OnFailure
+          # Fix: Use correct node selector value
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: "true"
+          tolerations:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+          - key: node-role.kubernetes.io/master
+            operator: Exists
+            effect: NoSchedule
+          containers:
+          - name: etcd-backup
+            image: k8s.gcr.io/etcd:3.5.9-0
+            command:
+            - /bin/sh
+            args:
+            - /scripts/etcd-backup.sh
+            env:
+            - name: ETCDCTL_API
+              value: "3"
+            - name: BACKUP_DIR
+              value: /backup/etcd
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            volumeMounts:
+            - name: backup-scripts
+              mountPath: /scripts
+            - name: etcd-certs
+              mountPath: /etc/kubernetes/pki/etcd
+              readOnly: true
+            - name: backup-storage
+              mountPath: /backup
+          volumes:
+          - name: backup-scripts
+            configMap:
+              name: backup-scripts
+              defaultMode: 0755
+          - name: etcd-certs
+            hostPath:
+              path: /etc/kubernetes/pki/etcd
+              type: Directory
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-storage-pvc
+
+---
+# Fix 4: Create PVC for backup storage using the working NFS provisioner
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-storage-pvc
+  namespace: backup
+  labels:
+    app: backup-storage
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple backup jobs need access
+  storageClassName: nfs-client  # Use the working NFS provisioner
+  resources:
+    requests:
+      storage: 100Gi  # Adjust based on backup needs
+
